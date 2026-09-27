@@ -155,7 +155,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
           </div>
         </footer>
       )}
-      {path !== "/assistant" && (
+      {path !== "/assistant" && path !== "/" && (
         <Link href="/assistant" className="assistant-fab">
           <ChatCircleDots size={22} />
           <span>帮我选</span>

@@ -402,8 +402,9 @@ function Assistant() {
                   children: (
                     <div>
                       <p>
-                        模型上下文容量：{stats.contextCapacity.toLocaleString()}{" "}
-                        token；计数方式：{stats.tokenizer}。
+                        当前模型一次可参考的文字容量为{" "}
+                        {stats.contextCapacity.toLocaleString()}{" "}
+                        token（文字计量单位）。
                       </p>
                       <p>
                         历史摘要：
@@ -494,7 +495,7 @@ function Assistant() {
         size={460}
       >
         <p className="memory-description">
-          导购会记住你提到的偏好和使用习惯，只用于你自己的推荐。新记忆异步整理，可能稍后出现；有冲突时优先参考你最近的表述。
+          导购会记住你提到的偏好和使用习惯，只用于你自己的推荐。新记忆需要一点时间整理；有冲突时优先参考你最近的表述。
         </p>
         <div className="memory-preference">
           <div>
@@ -505,7 +506,7 @@ function Assistant() {
             aria-label="使用个人记忆"
             checked={memoryEnabled}
             loading={memorySaving}
-            disabled={memoryLoading}
+            disabled={memoryLoading || !!memoryError}
             onChange={changeMemoryPreference}
           />
         </div>

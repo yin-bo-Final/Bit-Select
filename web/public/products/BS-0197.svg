@@ -1,1 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="400" viewBox="0 0 512 400"><title>记忆棉枕 · 旗舰 197：品类示意图</title><rect width="512" height="400" fill="#edf0f2"/><ellipse cx="256" cy="328" rx="129" ry="12" fill="#d8dee3"/><path d="M203 96v-8a53 53 0 0 1 106 0v8" fill="none" stroke="#696a89" stroke-width="14"/><rect x="155" y="85" width="202" height="237" rx="45" fill="#696a89"/><rect x="179" y="201" width="154" height="83" rx="20" fill="white" fill-opacity=".14"/><path d="M188 219h135" stroke="#273039" stroke-width="5"/><text x="256" y="373" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#77828c">BS-0197 · CONCEPT ILLUSTRATION</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="400" viewBox="0 0 512 400" role="img">
+<title>记忆棉枕 · 旗舰 197：原创商品概念图</title>
+<desc>根据商品名称绘制的原创矢量示意，展示基本形态；并非真实商品照片。</desc>
+<rect width="512" height="400" fill="#edf0f2"/>
+<ellipse cx="256" cy="329" rx="124" ry="11" fill="#dce2e7"/>
+<defs>
+      <linearGradient id="pe8aeb0e5bf86e6a389e69e95-4-body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9292a9"/><stop offset=".55" stop-color="#696a89"/><stop offset="1" stop-color="#54556e"/></linearGradient>
+      <linearGradient id="pe8aeb0e5bf86e6a389e69e95-4-metal" x1="0" y1="0" x2="1" y2=".4"><stop stop-color="#aeb9c3"/><stop offset=".35" stop-color="#e1e7ec"/><stop offset=".65" stop-color="#c9d2db"/><stop offset="1" stop-color="#8c9aa7"/></linearGradient>
+      <pattern id="pe8aeb0e5bf86e6a389e69e95-4-fabric" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 1h5M1 0v5" stroke="#edf1f4" stroke-opacity=".13" stroke-width=".65"/></pattern>
+      <pattern id="pe8aeb0e5bf86e6a389e69e95-4-holes" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="1.35" fill="#26313c" fill-opacity=".45"/></pattern>
+    </defs><g transform="translate(256 200) scale(1.040 1.008) translate(-256 -200)"><path d="M94 221q15-81 97-89q66 29 111 0q81-3 116 77l-7 64q-152 54-310 0Z" fill="url(#pe8aeb0e5bf86e6a389e69e95-4-body)" /><path d="M96 222q31-68 96-57q66 29 112 1q71-15 112 43q-89 81-207 54Z" fill="#c9c9d5" /><path d="M104 261q156 49 301-7" fill="none" stroke="#a0a1b5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 4"/><path d="M120 218q35-34 73-29q71 32 118-1q45-4 74 24" fill="none" stroke="#e1e1e7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></g>
+<text x="256" y="374" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="11" letter-spacing="1" fill="#697784">BS-0197 · CONCEPT ILLUSTRATION</text>
+</svg>

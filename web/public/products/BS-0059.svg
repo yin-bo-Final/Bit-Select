@@ -1,1 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="400" viewBox="0 0 512 400"><title>桌面收纳架 · 舒适 059：品类示意图</title><rect width="512" height="400" fill="#edf0f2"/><ellipse cx="256" cy="328" rx="129" ry="12" fill="#d8dee3"/><path d="M114 250L189 112h163l46 138z" fill="#8193a3"/><path d="M166 219h196" stroke="#cad3dc" stroke-width="9"/><rect x="99" y="252" width="312" height="27" rx="13" fill="#313c48"/><text x="256" y="373" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#77828c">BS-0059 · CONCEPT ILLUSTRATION</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="400" viewBox="0 0 512 400" role="img">
+<title>桌面收纳架 · 舒适 059：原创商品概念图</title>
+<desc>根据商品名称绘制的原创矢量示意，展示基本形态；并非真实商品照片。</desc>
+<rect width="512" height="400" fill="#edf0f2"/>
+<ellipse cx="256" cy="329" rx="124" ry="11" fill="#dce2e7"/>
+<defs>
+      <linearGradient id="pe6a18ce99da2e694b6e7bab3e69eb6-2-body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a3b0bc"/><stop offset=".55" stop-color="#8193a3"/><stop offset="1" stop-color="#677682"/></linearGradient>
+      <linearGradient id="pe6a18ce99da2e694b6e7bab3e69eb6-2-metal" x1="0" y1="0" x2="1" y2=".4"><stop stop-color="#aeb9c3"/><stop offset=".35" stop-color="#e1e7ec"/><stop offset=".65" stop-color="#c9d2db"/><stop offset="1" stop-color="#8c9aa7"/></linearGradient>
+      <pattern id="pe6a18ce99da2e694b6e7bab3e69eb6-2-fabric" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 1h5M1 0v5" stroke="#edf1f4" stroke-opacity=".13" stroke-width=".65"/></pattern>
+      <pattern id="pe6a18ce99da2e694b6e7bab3e69eb6-2-holes" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="1.35" fill="#26313c" fill-opacity=".45"/></pattern>
+    </defs><g transform="translate(256 200) scale(0.990 0.984) translate(-256 -200)"><rect x="119" y="126" width="17" height="187" rx="4" fill="url(#pe6a18ce99da2e694b6e7bab3e69eb6-2-body)" /><rect x="376" y="126" width="17" height="187" rx="4" fill="url(#pe6a18ce99da2e694b6e7bab3e69eb6-2-body)" /><path d="M115 137L350 110l42 27H115Z" fill="#a3b0bc" /><rect x="115" y="136" width="280" height="18" rx="4" fill="url(#pe6a18ce99da2e694b6e7bab3e69eb6-2-body)" /><rect x="131" y="224" width="247" height="15" rx="3" fill="url(#pe6a18ce99da2e694b6e7bab3e69eb6-2-body)" /><rect x="131" y="298" width="247" height="17" rx="3" fill="url(#pe6a18ce99da2e694b6e7bab3e69eb6-2-body)" /><rect x="244" y="151" width="14" height="73" rx="2" fill="url(#pe6a18ce99da2e694b6e7bab3e69eb6-2-body)" /><rect x="319" y="239" width="12" height="58" rx="2" fill="url(#pe6a18ce99da2e694b6e7bab3e69eb6-2-body)" /><path d="M142 170v42M270 252h35" fill="none" stroke="#a3b0bc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></g>
+<text x="256" y="374" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="11" letter-spacing="1" fill="#697784">BS-0059 · CONCEPT ILLUSTRATION</text>
+</svg>
