@@ -26,3 +26,8 @@ logs/
 *.pid
 Thumbs.db
 .DS_Store
+
+# Python tools
+__pycache__/
+*.pyc
+.venv/

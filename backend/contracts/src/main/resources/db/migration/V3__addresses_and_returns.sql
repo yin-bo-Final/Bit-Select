@@ -1,0 +1,4 @@
+CREATE TABLE user_addresses (id BIGINT PRIMARY KEY AUTO_INCREMENT,user_id BIGINT NOT NULL,recipient VARCHAR(80) NOT NULL,phone VARCHAR(24) NOT NULL,detail VARCHAR(500) NOT NULL,is_default BOOLEAN NOT NULL DEFAULT FALSE,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(user_id) REFERENCES users(id));
+CREATE INDEX idx_addresses_user ON user_addresses(user_id,is_default);
+CREATE TABLE refund_requests (id VARCHAR(36) PRIMARY KEY,order_id VARCHAR(36) NOT NULL UNIQUE,user_id BIGINT NOT NULL,reason VARCHAR(1000) NOT NULL,status VARCHAR(24) NOT NULL DEFAULT 'REQUESTED',review_reason VARCHAR(1000) NULL,reviewer_id BIGINT NULL,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,reviewed_at TIMESTAMP NULL,FOREIGN KEY(order_id) REFERENCES orders(id),FOREIGN KEY(user_id) REFERENCES users(id));
+CREATE INDEX idx_refunds_pending ON refund_requests(status,created_at);
