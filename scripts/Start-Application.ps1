@@ -49,8 +49,9 @@ function Test-RegisteredProcess($Entry) {
     $process = Get-Process -Id $Entry.pid -ErrorAction SilentlyContinue
     $detail = Get-CimInstance Win32_Process -Filter "ProcessId=$($Entry.pid)" -ErrorAction SilentlyContinue
     return $null -ne $process -and $null -ne $detail -and
-        $process.StartTime.ToUniversalTime().ToString('o') -eq $Entry.startedUtc -and
+        $process.StartTime.ToUniversalTime().Ticks -eq ([datetime]$Entry.startedUtc).ToUniversalTime().Ticks -and
         $detail.ExecutablePath -eq $Entry.executable -and
+        $detail.CommandLine -and
         $detail.CommandLine.IndexOf($Entry.marker, [StringComparison]::OrdinalIgnoreCase) -ge 0
 }
 

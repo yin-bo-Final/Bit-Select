@@ -10,8 +10,9 @@ foreach ($entry in $entries) {
     $process = Get-Process -Id $entry.pid -ErrorAction SilentlyContinue
     $detail = Get-CimInstance Win32_Process -Filter "ProcessId=$($entry.pid)" -ErrorAction SilentlyContinue
     if (-not $process -or -not $detail) { continue }
-    if ($process.StartTime.ToUniversalTime().ToString('o') -ne $entry.startedUtc -or
+    if ($process.StartTime.ToUniversalTime().Ticks -ne ([datetime]$entry.startedUtc).ToUniversalTime().Ticks -or
         $detail.ExecutablePath -ne $entry.executable -or
+        -not $detail.CommandLine -or
         $detail.CommandLine.IndexOf($entry.marker, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
         Write-Warning "$($entry.service) 的 PID 身份不匹配，未停止该进程。"
         continue
