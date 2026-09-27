@@ -1,1 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="400" viewBox="0 0 512 400"><title>静音鼠标 · 旗舰 070：品类示意图</title><rect width="512" height="400" fill="#edf0f2"/><ellipse cx="256" cy="328" rx="129" ry="12" fill="#d8dee3"/><path d="M114 250L189 112h163l46 138z" fill="#696a89"/><path d="M166 219h196" stroke="#cad3dc" stroke-width="9"/><rect x="99" y="252" width="312" height="27" rx="13" fill="#313c48"/><text x="256" y="373" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#77828c">BS-0070 · CONCEPT ILLUSTRATION</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="400" viewBox="0 0 512 400" role="img">
+<title>静音鼠标 · 旗舰 070：原创商品概念图</title>
+<desc>根据商品名称绘制的原创矢量示意，展示基本形态；并非真实商品照片。</desc>
+<rect width="512" height="400" fill="#edf0f2"/>
+<ellipse cx="256" cy="329" rx="124" ry="11" fill="#dce2e7"/>
+<defs>
+      <linearGradient id="pe99d99e99fb3e9bca0e6a087-4-body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9292a9"/><stop offset=".55" stop-color="#696a89"/><stop offset="1" stop-color="#54556e"/></linearGradient>
+      <linearGradient id="pe99d99e99fb3e9bca0e6a087-4-metal" x1="0" y1="0" x2="1" y2=".4"><stop stop-color="#aeb9c3"/><stop offset=".35" stop-color="#e1e7ec"/><stop offset=".65" stop-color="#c9d2db"/><stop offset="1" stop-color="#8c9aa7"/></linearGradient>
+      <pattern id="pe99d99e99fb3e9bca0e6a087-4-fabric" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 1h5M1 0v5" stroke="#edf1f4" stroke-opacity=".13" stroke-width=".65"/></pattern>
+      <pattern id="pe99d99e99fb3e9bca0e6a087-4-holes" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="1.35" fill="#26313c" fill-opacity=".45"/></pattern>
+    </defs><g transform="translate(256 200) scale(1.040 1.008) translate(-256 -200)"><path d="M180 206C180 142 205 103 256 103s76 39 76 103v39c0 54-26 78-76 78s-76-24-76-78Z" fill="url(#pe99d99e99fb3e9bca0e6a087-4-body)" /><path d="M256 106v97h-73" fill="none" stroke="#54556e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M259 203h69" fill="none" stroke="#54556e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" /><rect x="246" y="133" width="20" height="43" rx="9" fill="#26313c" /><rect x="251" y="138" width="10" height="32" rx="4" fill="#86939f" /><path d="M197 236q-2 49 21 59" fill="none" stroke="#9292a9" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></g>
+<text x="256" y="374" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="11" letter-spacing="1" fill="#697784">BS-0070 · CONCEPT ILLUSTRATION</text>
+</svg>

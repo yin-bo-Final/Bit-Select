@@ -18,6 +18,7 @@ node_modules/
 out/
 coverage/
 *.tsbuildinfo
+web/next-env.d.ts
 
 # Local infrastructure and logs
 .local/

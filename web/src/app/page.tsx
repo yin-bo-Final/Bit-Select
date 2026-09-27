@@ -95,8 +95,12 @@ export default function Home() {
                 <ArrowUpRightLink />
               </div>
             </Link>
-          ) : (
+          ) : loading ? (
             <Skeleton.Image active className="hero-skeleton" />
+          ) : (
+            <div className="image-unavailable" role="status">
+              {error ? "精选商品暂时未能加载，请在下方重试" : "好物正在准备中"}
+            </div>
           )}
         </div>
       </section>
