@@ -48,3 +48,24 @@
 - `GET /refund-requests`：本人售后；`GET /admin/refund-requests`：全站售后，返回 `{items:[{id,orderId,orderNo,userId,totalCents,reason,status,reviewReason,createdAt}]}`，状态 REQUESTED/REJECTED/COMPLETED。
 - `POST /admin/refund-requests/{id}/approve` `{reason,goodsReceived:true}`：管理员确认退货已验收，原子退余额、恢复库存、订单变REFUNDED；重复批准不重复退钱。
 - `POST /admin/refund-requests/{id}/reject` `{reason}`：拒绝售后，保留订单和余额。
+
+## 内部 RPC 与网关规则
+- `CatalogRpc.searchProducts(query,maxPriceCents,limit)` 用商品名实词查询实时目录；仅返回已上架、有库存、预算以内商品，金额始终为分；`maxPriceCents<=0` 表示不限预算，结果最多20条。`300元`应传入`30000`，展示层转换为元，不能直接把分作为元写入模型证据。
+- 本地 Dubbo 服务绑定 IPv6 回环 `::1`，注册到 Nacos 的实例地址也是 `::1`；LAN 地址和全网卡监听被拒绝。Dubbo 3.3.5 将所有 `127.*` 地址判为无效，故使用操作系统回环 IPv6。Java 21 所在本机需要启用 IPv6 回环。
+- Sentinel 网关限流规则持久化于 Nacos：分组 `BIT_SELECT`、Data ID `bit-gateway-flow-rules.json`。首次启动自动创建，之后订阅配置变化；重启重新读取。通过 Nacos 配置界面发布 JSON 即可动态调整，无需重启网关。需包含 catalog、commerce、ai、inventory 四条规则，每条 `{resource,count,intervalSec}`；count范围1–100000、intervalSec范围1–60。非法发布保留现行规则，Nacos临时不可用保持当前保护并定时重连。
+- Sentinel Dashboard 中直接推送的临时修改不写入 Nacos；需要持久保存的调整必须发布到上述 Nacos 配置。
+
+## AI 导购与个人记忆
+
+以下均要求登录，身份只从服务端会话读取。普通用户只能访问自己的会话与记忆。
+
+- `POST /ai/chat` `{conversationId?,message}`：流式 SSE，事件依次包含 `meta {conversationId}`、`phase {label}`、`sources {items}`、多条 `delta {content}`、`done {conversationId}`；失败返回 `error {message}`。同一会话未完成时返回 409，单实例并发满时返回 429，未配置模型返回 503。
+- `GET /ai/conversations` → `{items:[{id,title,updatedAt}]}`。
+- `GET /ai/conversations/{id}` → `{id,title,messages:[{role,content,createdAt,sources?}],stats:{contextCapacity,summaryThrough,summaryPresent,tokenizer}}`。引用随回答持久保存；`summaryThrough` 为摘要覆盖的数据库消息 ID，不是 token 数。
+- `GET /ai/memories` → `{items:[{id,content,source,confidence,updatedAt}],enabled}`。
+- `PUT /ai/memory-preference` `{enabled}` → `{ok:true}`。关闭后停用长期记忆的读取和新增，已有记录仍可查看、删除。
+- `DELETE /ai/memories/{id}` → `{ok:true}`，仅影响本人记忆；删除通过代际标记防止已排队的旧任务恢复记录。
+- `GET /ai/knowledge`（ADMIN）→ `{running,documents:[{id,productId,title,status,chunkCount,errorCode,updatedAt}]}`。
+- `POST /ai/knowledge/reindex`（ADMIN）→ `{started}`。异步同步版本变化或失败的 200 份目录说明书，重复触发不会启动第二个本机任务。
+
+AI 返回的业务证据将 `*Cents` 转为 `*Yuan` 十进制元字符串，原有商城 HTTP API 金额仍为整数分。AI 无付款、退款、调账等写交易工具。

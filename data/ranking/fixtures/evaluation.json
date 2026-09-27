@@ -1,0 +1,139 @@
+{
+  "labelSource": "synthetic",
+  "featureSource": "synthetic",
+  "datasetSha256": "4d51f67c08571a3b31e7d9f64016fcb5a8e570ec97a05392cfe5fc1c94d4458a",
+  "featureOrder": [
+    "bm25Score",
+    "cosineScore",
+    "rerankScore",
+    "exactProductMatch"
+  ],
+  "trainedAt": "2026-09-27T07:47:26.663211+00:00",
+  "lightgbmVersion": "4.6.0",
+  "qualityClaim": "pipeline_validation_only",
+  "bestIteration": 34,
+  "seed": 20260927,
+  "splitMethod": "query/product bipartite connected components; test never used for early stopping",
+  "splits": {
+    "test": {
+      "rows": 144,
+      "queries": 12,
+      "queryIds": [
+        "synthetic-q-0-0",
+        "synthetic-q-0-1",
+        "synthetic-q-0-2",
+        "synthetic-q-16-0",
+        "synthetic-q-16-1",
+        "synthetic-q-16-2",
+        "synthetic-q-2-0",
+        "synthetic-q-2-1",
+        "synthetic-q-2-2",
+        "synthetic-q-8-0",
+        "synthetic-q-8-1",
+        "synthetic-q-8-2"
+      ],
+      "productGroups": [
+        "synthetic-family-0",
+        "synthetic-family-16",
+        "synthetic-family-2",
+        "synthetic-family-8"
+      ]
+    },
+    "validation": {
+      "rows": 144,
+      "queries": 12,
+      "queryIds": [
+        "synthetic-q-17-0",
+        "synthetic-q-17-1",
+        "synthetic-q-17-2",
+        "synthetic-q-19-0",
+        "synthetic-q-19-1",
+        "synthetic-q-19-2",
+        "synthetic-q-3-0",
+        "synthetic-q-3-1",
+        "synthetic-q-3-2",
+        "synthetic-q-6-0",
+        "synthetic-q-6-1",
+        "synthetic-q-6-2"
+      ],
+      "productGroups": [
+        "synthetic-family-17",
+        "synthetic-family-19",
+        "synthetic-family-3",
+        "synthetic-family-6"
+      ]
+    },
+    "train": {
+      "rows": 432,
+      "queries": 36,
+      "queryIds": [
+        "synthetic-q-1-0",
+        "synthetic-q-1-1",
+        "synthetic-q-1-2",
+        "synthetic-q-10-0",
+        "synthetic-q-10-1",
+        "synthetic-q-10-2",
+        "synthetic-q-11-0",
+        "synthetic-q-11-1",
+        "synthetic-q-11-2",
+        "synthetic-q-12-0",
+        "synthetic-q-12-1",
+        "synthetic-q-12-2",
+        "synthetic-q-13-0",
+        "synthetic-q-13-1",
+        "synthetic-q-13-2",
+        "synthetic-q-14-0",
+        "synthetic-q-14-1",
+        "synthetic-q-14-2",
+        "synthetic-q-15-0",
+        "synthetic-q-15-1",
+        "synthetic-q-15-2",
+        "synthetic-q-18-0",
+        "synthetic-q-18-1",
+        "synthetic-q-18-2",
+        "synthetic-q-4-0",
+        "synthetic-q-4-1",
+        "synthetic-q-4-2",
+        "synthetic-q-5-0",
+        "synthetic-q-5-1",
+        "synthetic-q-5-2",
+        "synthetic-q-7-0",
+        "synthetic-q-7-1",
+        "synthetic-q-7-2",
+        "synthetic-q-9-0",
+        "synthetic-q-9-1",
+        "synthetic-q-9-2"
+      ],
+      "productGroups": [
+        "synthetic-family-1",
+        "synthetic-family-10",
+        "synthetic-family-11",
+        "synthetic-family-12",
+        "synthetic-family-13",
+        "synthetic-family-14",
+        "synthetic-family-15",
+        "synthetic-family-18",
+        "synthetic-family-4",
+        "synthetic-family-5",
+        "synthetic-family-7",
+        "synthetic-family-9"
+      ]
+    }
+  },
+  "testMetrics": {
+    "ndcg@5": {
+      "lambdaMART": 0.9810307053532278,
+      "rerankerBaseline": 0.8504235968479802,
+      "delta": 0.1306071085052476
+    },
+    "ndcg@10": {
+      "lambdaMART": 0.9882815602898932,
+      "rerankerBaseline": 0.8881028806041943,
+      "delta": 0.10017867968569893
+    }
+  },
+  "limitations": [
+    "No human relevance labels. These metrics do not establish user-facing quality improvement.",
+    "Synthetic features and labels validate only serialization and training mechanics."
+  ]
+}

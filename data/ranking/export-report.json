@@ -1,0 +1,12 @@
+{
+  "queriesRequested": 200,
+  "queriesExported": 200,
+  "excludedQueriesWithoutRankingSignal": [],
+  "rows": 2364,
+  "embeddingModel": "Qwen/Qwen3-Embedding-4B",
+  "rerankModel": "Qwen/Qwen3-Reranker-4B",
+  "labelSource": "catalog-target",
+  "featureSource": "actual-model-and-corpus",
+  "candidatePool": "one category per query to keep disjoint evaluation products",
+  "limitations": "Automatic target-product labels; not human open-ended recommendation evaluation."
+}

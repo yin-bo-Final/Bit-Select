@@ -38,6 +38,8 @@ while True:
     try:
         products = anonymous.call("GET", "/products?pageSize=100")
         assert products["total"] == 200, f"Expected 200 seeded products, got {products['total']}"
+        # Catalog may start before Commerce; only retry these read-only probes.
+        anonymous.call("GET", "/auth/me", expected=401)
         break
     except (AssertionError, URLError, TimeoutError, ConnectionError):
         if time.monotonic() >= deadline:

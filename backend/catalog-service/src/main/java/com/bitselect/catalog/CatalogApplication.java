@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @EnableDubbo
 public class CatalogApplication {
   public static void main(String[] args) {
+    com.bitselect.contracts.LocalRpc.configure();
     SpringApplication.run(CatalogApplication.class, args);
   }
 }

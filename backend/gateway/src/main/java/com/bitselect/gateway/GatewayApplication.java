@@ -2,7 +2,6 @@ package com.bitselect.gateway;
 
 import com.alibaba.csp.sentinel.adapter.gateway.common.rule.*;
 import com.alibaba.csp.sentinel.adapter.gateway.sc.SentinelGatewayFilter;
-import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.*;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -13,6 +12,7 @@ import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
 import reactor.core.publisher.Mono;
 
+@org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication
 public class GatewayApplication {
   public static void main(String[] args) {
@@ -67,7 +67,8 @@ public class GatewayApplication {
             "ai",
             r ->
                 r.path(
-                        "/api/ai/**", "/api/assistant/**",
+                        "/api/ai/**",
+                        "/api/assistant/**",
                         "/api/knowledge/**",
                         "/api/memory/**",
                         "/api/admin/knowledge/**")
@@ -90,11 +91,19 @@ public class GatewayApplication {
 
   @Bean
   GlobalFilter sentinel() {
-    GatewayRuleManager.loadRules(
-        Set.of(
-            new GatewayFlowRule("catalog").setCount(100).setIntervalSec(1),
-            new GatewayFlowRule("commerce").setCount(80).setIntervalSec(1),
-            new GatewayFlowRule("ai").setCount(15).setIntervalSec(1)));
     return new SentinelGatewayFilter(-1);
+  }
+
+  @Bean
+  @org.springframework.core.annotation.Order(-2)
+  com.alibaba.csp.sentinel.adapter.gateway.sc.exception.SentinelGatewayBlockExceptionHandler
+      sentinelErrors(org.springframework.http.codec.ServerCodecConfigurer codecs) {
+    com.alibaba.csp.sentinel.adapter.gateway.sc.callback.GatewayCallbackManager.setBlockHandler(
+        (exchange, error) ->
+            org.springframework.web.reactive.function.server.ServerResponse.status(429)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue(java.util.Map.of("code", "RATE_LIMITED", "message", "请求过于频繁，请稍后再试")));
+    return new com.alibaba.csp.sentinel.adapter.gateway.sc.exception
+        .SentinelGatewayBlockExceptionHandler(java.util.List.of(), codecs);
   }
 }
