@@ -28,6 +28,8 @@ jobs:
           python-version: '3.12'
       - name: 检查文件编码、私密配置与密钥
         run: python scripts/check-repository.py
+      - name: 核验排序数据与模型指纹
+        run: python data/ranking/verify-artifacts.py
       - id: components
         name: 识别已提交组件
         run: |
@@ -125,7 +127,7 @@ jobs:
           docker compose --env-file infra/.env.example -f infra/compose.yml --profile full config --format json | python scripts/check-compose.py
 
   integration:
-    name: MySQL Redis Nacos Dubbo 交易集成
+    name: 微服务交易与 AI 权限集成
     needs: [repository, backend, infrastructure]
     if: needs.repository.outputs.backend == 'true' && needs.repository.outputs.infra == 'true'
     runs-on: ubuntu-latest
@@ -146,7 +148,7 @@ jobs:
           path: .local/backend-jars
       - name: 启动真实中间件
         run: docker compose --env-file infra/.env.example -f infra/compose.yml up -d --wait --wait-timeout 240
-      - name: 启动三个业务服务
+      - name: 启动商城与 AI 业务服务
         run: |
           mkdir -p .local/logs
           set -a
@@ -158,10 +160,16 @@ jobs:
             test -n "$jar"
             java -Xms64m -Xmx256m -XX:ActiveProcessorCount=2 -jar "$jar" > ".local/logs/$service.log" 2>&1 &
           done
+          jar=$(find .local/backend-jars/ai-service/target -maxdepth 1 -name '*.jar' ! -name '*original*' | head -1)
+          test -n "$jar"
+          export AI_RANKING_MODEL="$GITHUB_WORKSPACE/data/ranking/model.json"
+          java -Xms64m -Xmx512m -XX:ActiveProcessorCount=2 -jar "$jar" > .local/logs/ai-service.log 2>&1 &
       - name: 验证真实交易链路
         run: python scripts/smoke-test.py --wait-seconds 180
       - name: 验证真实并发库存与支付
         run: python scripts/real-concurrency-test.py
+      - name: 验证 AI 真实权限与用户隔离（无模型调用）
+        run: python scripts/ai-smoke-test.py --wait-seconds 90
       - name: 失败时输出服务诊断
         if: failure()
         run: |

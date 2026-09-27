@@ -1,0 +1,3 @@
+# Ranking provenance hashes use the exact UTF-8/LF dataset bytes.
+# Keep this scoped to ranking data; do not normalize source manuals.
+data/ranking/**/*.jsonl text eol=lf

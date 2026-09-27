@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class CommerceApplication {
   public static void main(String[] args) {
+    com.bitselect.contracts.LocalRpc.configure();
     SpringApplication.run(CommerceApplication.class, args);
   }
 }

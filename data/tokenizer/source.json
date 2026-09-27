@@ -1,0 +1,8 @@
+{
+  "model": "Qwen/Qwen3-30B-A3B-Instruct-2507",
+  "source": "https://modelscope.cn/models/Qwen/Qwen3-30B-A3B-Instruct-2507/resolve/master/tokenizer.json",
+  "upstream": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Instruct-2507",
+  "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+  "license": "Apache-2.0",
+  "vocabularySize": 151643
+}
