@@ -1,0 +1,19 @@
+minio:
+  bucketName: bit-select-milvus
+  rootPath: milvus
+  useSSL: false
+  useIAM: false
+  useVirtualHost: false
+  region: us-east-1
+mq:
+  type: rocksmq
+common:
+  security:
+    authorizationEnabled: false
+queryNode:
+  segcore:
+    knowhereThreadPoolNumRatio: 1
+  cache:
+    memoryLimit: 536870912
+log:
+  level: warn
