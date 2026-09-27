@@ -133,7 +133,7 @@ jobs:
     env:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: local_example_admin_change_me
-      FRONTEND_ORIGIN: http://127.0.0.1:8080
+      FRONTEND_ORIGIN: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -160,6 +160,8 @@ jobs:
           done
       - name: 验证真实交易链路
         run: python scripts/smoke-test.py --wait-seconds 180
+      - name: 验证真实并发库存与支付
+        run: python scripts/real-concurrency-test.py
       - name: 失败时输出服务诊断
         if: failure()
         run: |

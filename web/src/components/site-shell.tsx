@@ -1,0 +1,166 @@
+"use client";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { App, Button, Dropdown } from "antd";
+import {
+  ChatCircleDots,
+  ShoppingBag,
+  Moon,
+  Sun,
+  UserCircle,
+  List,
+  ArrowUpRight,
+} from "@phosphor-icons/react";
+import { useSession } from "./providers";
+import { errorText } from "@/lib/api";
+
+const links = [
+  { href: "/", label: "精选好物" },
+  { href: "/assistant", label: "导购助手" },
+  { href: "/orders", label: "我的订单" },
+];
+export function SiteShell({ children }: { children: React.ReactNode }) {
+  const path = usePathname();
+  const router = useRouter();
+  const { user, logout, dark, toggleTheme } = useSession();
+  const { message } = App.useApp();
+  return (
+    <>
+      <a href="#main-content" className="skip-link">
+        跳至主要内容
+      </a>
+      <div className="announcement">
+        用心挑选，让日常更好一点。<span>电子科技 / 居家生活</span>
+      </div>
+      <header className="site-header">
+        <div className="header-inner">
+          <Link href="/" className="brand" aria-label="比特严选首页">
+            <span className="brand-mark">b.</span>
+            <span>
+              比特严选<small>BIT SELECT</small>
+            </span>
+          </Link>
+          <nav aria-label="主导航" className="desktop-nav">
+            {links.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={path === link.href ? "page" : undefined}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+          <div className="header-actions">
+            <Button
+              type="text"
+              shape="circle"
+              aria-label={dark ? "切换浅色外观" : "切换深色外观"}
+              icon={dark ? <Sun size={21} /> : <Moon size={21} />}
+              onClick={toggleTheme}
+            />
+            <Link href="/cart" aria-label="购物袋" className="icon-link">
+              <ShoppingBag size={23} />
+            </Link>
+            {user ? (
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: "account",
+                      label: "我的钱包与账户",
+                      onClick: () => router.push("/account"),
+                    },
+                    ...(user.role === "ADMIN"
+                      ? [
+                          {
+                            key: "admin",
+                            label: "管理后台",
+                            onClick: () => router.push("/admin"),
+                          },
+                        ]
+                      : []),
+                    {
+                      key: "logout",
+                      label: "退出登录",
+                      onClick: () => {
+                        void logout()
+                          .then(() => router.push("/"))
+                          .catch((e) => message.error(errorText(e)));
+                      },
+                    },
+                  ],
+                }}
+              >
+                <Button
+                  type="text"
+                  className="account-button"
+                  icon={<UserCircle size={22} />}
+                >
+                  {user.nickname || user.username}
+                </Button>
+              </Dropdown>
+            ) : (
+              <Link href="/login" className="login-link">
+                登录 / 注册
+              </Link>
+            )}
+            <Dropdown
+              menu={{
+                items: [
+                  ...links.map((link) => ({
+                    key: link.href,
+                    label: link.label,
+                    onClick: () => router.push(link.href),
+                  })),
+                  {
+                    key: "/account",
+                    label: "我的钱包",
+                    onClick: () => router.push("/account"),
+                  },
+                ],
+              }}
+            >
+              <Button
+                className="mobile-menu"
+                type="text"
+                shape="circle"
+                aria-label="展开导航"
+                icon={<List size={23} />}
+              />
+            </Dropdown>
+          </div>
+        </div>
+      </header>
+      <main
+        id="main-content"
+        className={path === "/assistant" ? "chat-main" : "main-content"}
+      >
+        {children}
+      </main>
+      {path !== "/assistant" && (
+        <footer className="site-footer">
+          <div>
+            <Link href="/" className="footer-brand">
+              比特严选
+            </Link>
+            <p>少一点选择负担，多一点日常喜欢。</p>
+          </div>
+          <div className="footer-links">
+            <Link href="/assistant">
+              让导购帮你选 <ArrowUpRight size={16} />
+            </Link>
+            <Link href="/account">账户与钱包</Link>
+            <span>演示商城 · 使用平台余额交易</span>
+          </div>
+        </footer>
+      )}
+      {path !== "/assistant" && (
+        <Link href="/assistant" className="assistant-fab">
+          <ChatCircleDots size={22} />
+          <span>帮我选</span>
+        </Link>
+      )}
+    </>
+  );
+}
