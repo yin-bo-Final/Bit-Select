@@ -1,0 +1,36 @@
+name: Bit Select CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository:
+    name: 仓库与凭证检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 检查文件编码、私密配置与密钥
+        run: python scripts/check-repository.py
+      - name: 检查 PR 标题
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          python - <<'PY'
+          import os, re
+          title = os.environ['PR_TITLE']
+          assert re.fullmatch(r'(feat|fix|docs|test|refactor|chore|build|ci|perf):[^/\n]+/[^\n]*[\u4e00-\u9fff][^\n]*', title), 'PR 标题应为 type:English title/中文标题'
+          PY
