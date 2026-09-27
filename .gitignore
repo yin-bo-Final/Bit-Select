@@ -1,0 +1,28 @@
+# Local credentials and environment
+.env
+.env.*
+!.env.example
+!.env.*.example
+secrets/
+*.pem
+*.key
+
+# Java and IDE
+**/target/
+.idea/
+*.iml
+
+# Next.js / Node
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Local infrastructure and logs
+.local/
+logs/
+*.log
+*.pid
+Thumbs.db
+.DS_Store
