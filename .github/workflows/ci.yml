@@ -17,6 +17,10 @@ jobs:
   repository:
     name: 仓库与凭证检查
     runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.components.outputs.backend }}
+      web: ${{ steps.components.outputs.web }}
+      infra: ${{ steps.components.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,6 +28,12 @@ jobs:
           python-version: '3.12'
       - name: 检查文件编码、私密配置与密钥
         run: python scripts/check-repository.py
+      - id: components
+        name: 识别已提交组件
+        run: |
+          for component in backend web infra; do
+            if test -d "$component"; then echo "$component=true" >> "$GITHUB_OUTPUT"; else echo "$component=false" >> "$GITHUB_OUTPUT"; fi
+          done
       - name: 检查 PR 标题
         if: github.event_name == 'pull_request'
         env:
@@ -34,3 +44,133 @@ jobs:
           title = os.environ['PR_TITLE']
           assert re.fullmatch(r'(feat|fix|docs|test|refactor|chore|build|ci|perf):[^/\n]+/[^\n]*[\u4e00-\u9fff][^\n]*', title), 'PR 标题应为 type:English title/中文标题'
           PY
+
+  backend:
+    name: Java 21 后端构建与测试
+    needs: repository
+    if: needs.repository.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: 编译并运行真实测试
+        run: mvn -B -ntp -f backend/pom.xml verify
+      - name: 确认测试未被跳过
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          reports = list(Path('backend').glob('**/target/surefire-reports/TEST-*.xml'))
+          roots = [ET.parse(report).getroot() for report in reports]
+          executed = sum(int(r.get('tests', 0)) - int(r.get('skipped', 0)) for r in roots)
+          assert executed > 0, '后端必须实际执行测试，不能以空测试套件通过'
+          print(f'后端实际执行 {executed} 个测试')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-reports
+          path: backend/**/target/surefire-reports/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-jars
+          path: backend/**/target/*.jar
+          if-no-files-found: error
+
+  web:
+    name: Next.js 前端构建与测试
+    needs: repository
+    if: needs.repository.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: |
+            web/.next/
+            !web/.next/cache/
+          include-hidden-files: true
+          if-no-files-found: error
+
+  infrastructure:
+    name: 容器配置与隔离检查
+    needs: repository
+    if: needs.repository.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 校验 Compose
+        run: |
+          docker compose --env-file infra/.env.example -f infra/compose.yml --profile full config --quiet
+          docker compose --env-file infra/.env.example -f infra/compose.yml --profile full config --format json | python scripts/check-compose.py
+
+  integration:
+    name: MySQL Redis Nacos Dubbo 交易集成
+    needs: [repository, backend, infrastructure]
+    if: needs.repository.outputs.backend == 'true' && needs.repository.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: local_example_admin_change_me
+      FRONTEND_ORIGIN: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-jars
+          path: .local/backend-jars
+      - name: 启动真实中间件
+        run: docker compose --env-file infra/.env.example -f infra/compose.yml up -d --wait --wait-timeout 240
+      - name: 启动三个业务服务
+        run: |
+          mkdir -p .local/logs
+          set -a
+          source infra/.env.example
+          export CATALOG_SEED_PATH="$GITHUB_WORKSPACE/data/products.json"
+          set +a
+          for service in catalog-service commerce-service gateway; do
+            jar=$(find ".local/backend-jars/$service/target" -maxdepth 1 -name '*.jar' ! -name '*original*' | head -1)
+            test -n "$jar"
+            java -Xms64m -Xmx256m -XX:ActiveProcessorCount=2 -jar "$jar" > ".local/logs/$service.log" 2>&1 &
+          done
+      - name: 验证真实交易链路
+        run: python scripts/smoke-test.py --wait-seconds 180
+      - name: 失败时输出服务诊断
+        if: failure()
+        run: |
+          for file in .local/logs/*.log; do test ! -f "$file" || tail -100 "$file"; done
+          docker compose --env-file infra/.env.example -f infra/compose.yml ps
+      - name: 保留集成日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs
+          path: .local/logs/
+      - name: 关闭 CI 临时容器
+        if: always()
+        run: docker compose --env-file infra/.env.example -f infra/compose.yml down

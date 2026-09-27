@@ -1,0 +1,310 @@
+name: bit-select
+
+x-service: &service
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '3'
+
+services:
+  storage-permissions:
+    image: python:3.12.10-alpine
+    user: '0:0'
+    command: [sh, -ec, 'chown 3000:3000 /mq-store /mq-namesrv-logs /mq-broker-logs; chown 10001:10001 /rustfs-data /rustfs-logs']
+    volumes:
+      - rocketmq-store:/mq-store
+      - rocketmq-namesrv-logs:/mq-namesrv-logs
+      - rocketmq-broker-logs:/mq-broker-logs
+      - rustfs-data:/rustfs-data
+      - rustfs-logs:/rustfs-logs
+    mem_limit: 64m
+    restart: 'no'
+
+  mysql:
+    <<: *service
+    image: mysql:8.4.8
+    environment:
+      MYSQL_DATABASE: bit_select
+      MYSQL_USER: bit_select
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Run scripts/Initialize-LocalEnvironment.ps1 first}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+    command: [--character-set-server=utf8mb4, --collation-server=utf8mb4_0900_ai_ci, --innodb-buffer-pool-size=134217728, --max-connections=100]
+    ports: ['127.0.0.1:${MYSQL_PORT:-13306}:3306']
+    volumes: [mysql-data:/var/lib/mysql]
+    mem_limit: 640m
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u $$MYSQL_USER -D $$MYSQL_DATABASE -e "SELECT 1" >/dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  redis:
+    <<: *service
+    image: redis:7.4.5-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    command: [sh, -c, 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD" --maxmemory 128mb --maxmemory-policy noeviction']
+    ports: ['127.0.0.1:${REDIS_PORT:-16379}:6379']
+    volumes: [redis-data:/data]
+    mem_limit: 192m
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  nacos:
+    <<: *service
+    image: nacos/nacos-server:v2.5.1
+    environment:
+      MODE: standalone
+      PREFER_HOST_MODE: hostname
+      NACOS_AUTH_ENABLE: 'false'
+      JVM_XMS: 128m
+      JVM_XMX: 256m
+      JVM_XMN: 64m
+      JVM_MS: 64m
+      JVM_MMS: 160m
+      TOMCAT_ACCESSLOG_ENABLED: 'false'
+    ports:
+      - '127.0.0.1:${NACOS_PORT:-18848}:8848'
+      - '127.0.0.1:${NACOS_GRPC_PORT:-19848}:9848'
+    volumes:
+      - nacos-data:/home/nacos/data
+      - nacos-logs:/home/nacos/logs
+    mem_limit: 640m
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:8848/nacos/v1/console/health/readiness >/dev/null']
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  sentinel:
+    <<: *service
+    profiles: [observability, full]
+    build:
+      context: ./sentinel
+    image: bit-select/sentinel-dashboard:1.8.10
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx160m
+      SENTINEL_USERNAME: ${SENTINEL_USERNAME:-admin}
+      SENTINEL_PASSWORD: ${SENTINEL_PASSWORD:?Set SENTINEL_PASSWORD}
+    ports: ['127.0.0.1:${SENTINEL_PORT:-18880}:8080']
+    mem_limit: 320m
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:8080/ >/dev/null']
+      interval: 20s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  rocketmq-namesrv:
+    <<: *service
+    image: apache/rocketmq:5.3.3
+    depends_on:
+      storage-permissions:
+        condition: service_completed_successfully
+    environment:
+      JAVA_OPT_EXT: -Xms64m -Xmx128m -Xmn32m
+    command: [sh, mqnamesrv]
+    ports: ['127.0.0.1:${ROCKETMQ_NAMESRV_PORT:-19876}:9876']
+    volumes: [rocketmq-namesrv-logs:/home/rocketmq/logs]
+    mem_limit: 256m
+    healthcheck:
+      test: [CMD-SHELL, 'bash -c "echo > /dev/tcp/127.0.0.1/9876"']
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  rocketmq-broker:
+    <<: *service
+    image: apache/rocketmq:5.3.3
+    depends_on:
+      storage-permissions:
+        condition: service_completed_successfully
+      rocketmq-namesrv:
+        condition: service_healthy
+    environment:
+      NAMESRV_ADDR: rocketmq-namesrv:9876
+      JAVA_OPT_EXT: -Xms128m -Xmx256m -Xmn64m -XX:MaxDirectMemorySize=128m
+    command: [sh, mqbroker, -c, /home/rocketmq/conf/bit-select-broker.conf]
+    ports:
+      - '127.0.0.1:20911:20911'
+      - '127.0.0.1:20909:20909'
+    volumes:
+      - ./rocketmq/broker.conf:/home/rocketmq/conf/bit-select-broker.conf:ro
+      - rocketmq-store:/home/rocketmq/store
+      - rocketmq-broker-logs:/home/rocketmq/logs
+    mem_limit: 576m
+    healthcheck:
+      test: [CMD-SHELL, 'bash -c "echo > /dev/tcp/127.0.0.1/20911"']
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  rustfs:
+    <<: *service
+    profiles: [ai, full]
+    image: rustfs/rustfs:1.0.0
+    depends_on:
+      storage-permissions:
+        condition: service_completed_successfully
+    environment:
+      RUSTFS_VOLUMES: /data/rustfs0
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: 'true'
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY}
+      RUSTFS_OBS_LOGGER_LEVEL: warn
+      RUSTFS_OBS_LOG_DIRECTORY: /app/logs
+      RUSTFS_CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      RUSTFS_CONSOLE_CORS_ALLOWED_ORIGINS: http://localhost:19001,http://127.0.0.1:19001
+    ports:
+      - '127.0.0.1:${RUSTFS_PORT:-19000}:9000'
+      - '127.0.0.1:${RUSTFS_CONSOLE_PORT:-19001}:9001'
+    volumes: [rustfs-data:/data, rustfs-logs:/app/logs]
+    mem_limit: 512m
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:9000/health >/dev/null']
+      interval: 15s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+
+  rocketmq-init:
+    image: apache/rocketmq:5.3.3
+    depends_on:
+      rocketmq-broker:
+        condition: service_healthy
+    environment:
+      JAVA_OPT_EXT: -Xms32m -Xmx96m -XX:ActiveProcessorCount=2
+    command: [sh, -ec, 'sh mqadmin updateTopic -n rocketmq-namesrv:9876 -b rocketmq-broker:20911 -t bit-commerce-events -r 2 -w 2; sh mqadmin updateTopic -n rocketmq-namesrv:9876 -b rocketmq-broker:20911 -t bit-select-memory -r 2 -w 2']
+    mem_limit: 192m
+    restart: 'no'
+
+  object-storage-init:
+    profiles: [ai, full]
+    image: python:3.12.10-alpine
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    environment:
+      S3_ENDPOINT: http://rustfs:9000
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY}
+    volumes: ['./rustfs/create-buckets.py:/create-buckets.py:ro']
+    command: [python, /create-buckets.py]
+    mem_limit: 64m
+    restart: 'no'
+
+  etcd:
+    <<: *service
+    profiles: [ai, full]
+    image: quay.io/coreos/etcd:v3.5.25
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: '1000'
+      ETCD_QUOTA_BACKEND_BYTES: '134217728'
+      ETCD_SNAPSHOT_COUNT: '10000'
+    command: [etcd, -advertise-client-urls=http://etcd:2379, -listen-client-urls=http://0.0.0.0:2379, --data-dir=/etcd]
+    volumes: [etcd-data:/etcd]
+    mem_limit: 192m
+    healthcheck:
+      test: [CMD, etcdctl, endpoint, health]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  milvus:
+    <<: *service
+    profiles: [ai, full]
+    image: milvusdb/milvus:v2.6.24
+    command: [milvus, run, standalone]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: rustfs:9000
+      MINIO_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:?Set RUSTFS_ACCESS_KEY}
+      MINIO_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:?Set RUSTFS_SECRET_KEY}
+      MINIO_BUCKET_NAME: bit-select-milvus
+      GOMAXPROCS: '4'
+      GOMEMLIMIT: 1400MiB
+    volumes:
+      - milvus-data:/var/lib/milvus
+      - ./milvus/user.yaml:/milvus/configs/user.yaml:ro
+    ports:
+      - '127.0.0.1:${MILVUS_PORT:-19530}:19530'
+      - '127.0.0.1:${MILVUS_HEALTH_PORT:-19091}:9091'
+    depends_on:
+      etcd:
+        condition: service_healthy
+      object-storage-init:
+        condition: service_completed_successfully
+    mem_limit: 2g
+    shm_size: 256m
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:9091/healthz]
+      interval: 20s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+
+  neo4j:
+    <<: *service
+    profiles: [ai, full]
+    image: neo4j:5.26.12-community
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD}
+      NEO4J_server_memory_heap_initial__size: 128m
+      NEO4J_server_memory_heap_max__size: 256m
+      NEO4J_server_memory_pagecache_size: 128m
+      NEO4J_server_default__listen__address: 0.0.0.0
+      NEO4J_server_bolt_advertised__address: localhost:17687
+      NEO4J_server_http_advertised__address: localhost:17474
+    ports:
+      - '127.0.0.1:${NEO4J_HTTP_PORT:-17474}:7474'
+      - '127.0.0.1:${NEO4J_BOLT_PORT:-17687}:7687'
+    volumes: [neo4j-data:/data, neo4j-logs:/logs]
+    mem_limit: 768m
+    healthcheck:
+      test: [CMD-SHELL, 'wget -q -O /dev/null http://localhost:7474 || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 50s
+
+  tika:
+    <<: *service
+    profiles: [ai, full]
+    image: apache/tika:3.2.3.0-full
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx256m
+    ports: ['127.0.0.1:${TIKA_PORT:-19998}:9998']
+    mem_limit: 512m
+    healthcheck:
+      test: [CMD-SHELL, 'wget -q -O /dev/null http://localhost:9998/version || exit 1']
+      interval: 20s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+
+volumes:
+  mysql-data:
+  redis-data:
+  nacos-data:
+  nacos-logs:
+  rocketmq-namesrv-logs:
+  rocketmq-store:
+  rocketmq-broker-logs:
+  rustfs-data:
+  rustfs-logs:
+  etcd-data:
+  milvus-data:
+  neo4j-data:
+  neo4j-logs:
