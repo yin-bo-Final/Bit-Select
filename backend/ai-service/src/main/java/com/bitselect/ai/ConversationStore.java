@@ -205,10 +205,12 @@ public class ConversationStore {
 
   public void save(long user, String id, String question, String answer, Object sources)
       throws Exception {
+    model.checkRequest();
     String turn = UUID.randomUUID().toString();
     String sourceJson = json.writeValueAsString(sources);
     tx.executeWithoutResult(
         status -> {
+          model.checkRequest();
           owned(user, id);
           db.update(
               "INSERT INTO ai_message(conversation_id,user_id,turn_id,role,content)"

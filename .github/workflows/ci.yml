@@ -159,6 +159,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: 安装真实 Next.js 代理验收依赖
+        run: npm --prefix web ci
       - uses: actions/download-artifact@v4
         with:
           name: backend-jars
@@ -187,6 +194,8 @@ jobs:
         run: python scripts/real-concurrency-test.py
       - name: 验证 AI 真实权限与用户隔离（无模型调用）
         run: python scripts/ai-smoke-test.py --wait-seconds 90
+      - name: 验证 SSE 代理、提前输出、超时与取消（本地模拟模型）
+        run: python scripts/sse-integration-test.py --jar-dir .local/backend-jars --env-file infra/.env.example --with-next
       - name: 失败时输出服务诊断
         if: failure()
         run: |
@@ -198,6 +207,17 @@ jobs:
         with:
           name: integration-logs
           path: .local/logs/
+      - name: 保留 SSE 集成证据
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sse-integration-evidence
+          path: |
+            .local/sse-integration/*/results.json
+            .local/sse-integration/*/ai.log
+            .local/sse-integration/*/gateway.log
+            .local/sse-integration/*/next.log
+          if-no-files-found: ignore
       - name: 关闭 CI 临时容器
         if: always()
         run: docker compose --env-file infra/.env.example -f infra/compose.yml down

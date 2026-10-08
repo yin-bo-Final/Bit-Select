@@ -1,6 +1,11 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   App,
@@ -17,9 +22,10 @@ import {
 } from "antd";
 import {
   ArrowRight,
+  ArrowDown,
+  ArrowUp,
   Brain,
   ChatCircleDots,
-  Check,
   ClockCounterClockwise,
   BookOpenText,
   CookingPot,
@@ -30,12 +36,17 @@ import {
   Stop,
   Trash,
 } from "@phosphor-icons/react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { api, date, errorText } from "@/lib/api";
 import { readEvents } from "@/lib/sse";
 import type { ChatMessage, Conversation, Memory, Source } from "@/lib/types";
 import { LoginGate } from "@/components/common";
+import {
+  AssistantStreamMessage,
+  updatePublicPhases,
+  type StreamChatMessage,
+  type PublicPhase,
+} from "@/components/assistant-stream-message";
+import "./assistant-stream.css";
 type ConversationStats = {
   contextCapacity: number;
   summaryThrough: number;
@@ -54,7 +65,8 @@ function Assistant() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(true);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<StreamChatMessage[]>([]);
+  const hasMessages = messages.length > 0;
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -66,34 +78,90 @@ function Assistant() {
   const [memoryError, setMemoryError] = useState("");
   const [memoryEnabled, setMemoryEnabled] = useState(true);
   const [memorySaving, setMemorySaving] = useState(false);
-  const [phase, setPhase] = useState("正在查阅商品与选购信息…");
+  const [announcement, setAnnouncement] = useState("");
+  const [showLatest, setShowLatest] = useState(false);
   const [stats, setStats] = useState<ConversationStats | null>(null);
-  const abort = useRef<AbortController | null>(null);
-  const end = useRef<HTMLDivElement | null>(null);
+  const activeRequest = useRef<{
+    id: string;
+    controller: AbortController;
+  } | null>(null);
+  const historyRequest = useRef<AbortController | null>(null);
+  const mounted = useRef(true);
+  const viewRevision = useRef(0);
+  const historyRevision = useRef(0);
+  const activeConversation = useRef<string | null>(null);
+  const draft = useRef("");
+  const transcript = useRef<HTMLDivElement | null>(null);
+  const transcriptContent = useRef<HTMLDivElement | null>(null);
+  const followBottom = useRef(true);
   const inputRef = useRef<React.ComponentRef<typeof Input.TextArea>>(null);
   const { message: toast } = App.useApp();
+  const updateDraft = useCallback((value: string) => {
+    draft.current = value;
+    setInput(value);
+  }, []);
   const loadConversations = useCallback(async () => {
+    const revision = ++historyRevision.current;
     try {
       const result = await api<{ items: Conversation[] }>("/ai/conversations");
-      setConversations(result.items);
+      if (mounted.current && revision === historyRevision.current)
+        setConversations(result.items);
     } catch (e) {
-      setError(errorText(e));
+      if (mounted.current && revision === historyRevision.current)
+        setError(errorText(e));
     } finally {
-      setConversationsLoading(false);
+      if (mounted.current && revision === historyRevision.current)
+        setConversationsLoading(false);
     }
   }, []);
   useEffect(() => {
+    mounted.current = true;
     void loadConversations();
     const params = new URLSearchParams(window.location.search);
     if (params.get("name"))
-      setInput(`请介绍一下${params.get("name")}，它适合哪些使用场景？`);
-    return () => abort.current?.abort();
-  }, [loadConversations]);
+      updateDraft(
+        `请介绍一下${params.get("name")}，它适合哪些使用场景？`.slice(0, 8000),
+      );
+    return () => {
+      mounted.current = false;
+      activeRequest.current?.controller.abort();
+      historyRequest.current?.abort();
+    };
+  }, [loadConversations, updateDraft]);
+  const keepLatestVisible = useCallback(() => {
+    const element = transcript.current;
+    if (!element) return;
+    if (!hasMessages) {
+      element.scrollTop = 0;
+      followBottom.current = true;
+      setShowLatest(false);
+      return;
+    }
+    if (followBottom.current) element.scrollTop = element.scrollHeight;
+    setShowLatest(
+      element.scrollHeight - element.clientHeight - element.scrollTop > 96,
+    );
+  }, [hasMessages]);
+  useLayoutEffect(keepLatestVisible, [
+    messages,
+    historyLoading,
+    keepLatestVisible,
+  ]);
   useEffect(() => {
-    end.current?.scrollIntoView({ behavior: "instant", block: "end" });
-  }, [messages]);
+    const observer = new ResizeObserver(keepLatestVisible);
+    if (transcript.current) observer.observe(transcript.current);
+    if (transcriptContent.current) observer.observe(transcriptContent.current);
+    return () => observer.disconnect();
+  }, [keepLatestVisible]);
+  const jumpToLatest = () => {
+    followBottom.current = true;
+    keepLatestVisible();
+  };
   const loadConversation = async (id: string) => {
-    if (busy || historyLoading) return;
+    if (activeRequest.current || historyRequest.current) return;
+    const controller = new AbortController();
+    historyRequest.current = controller;
+    const revision = ++viewRevision.current;
     setHistoryLoading(true);
     setError("");
     setHistoryOpen(false);
@@ -102,22 +170,44 @@ function Assistant() {
         id: string;
         messages: ChatMessage[];
         stats?: ConversationStats;
-      }>(`/ai/conversations/${id}`);
-      setMessages(result.messages);
+      }>(`/ai/conversations/${id}`, { signal: controller.signal });
+      if (!mounted.current || revision !== viewRevision.current) return;
+      followBottom.current = true;
+      setMessages(
+        result.messages.map((item, index) => ({
+          ...item,
+          id: `${id}-${index}`,
+          status: "complete",
+        })),
+      );
+      activeConversation.current = result.id;
       setConversationId(result.id);
       setStats(result.stats || null);
     } catch (e) {
-      setError(errorText(e));
+      if (
+        mounted.current &&
+        !controller.signal.aborted &&
+        revision === viewRevision.current
+      )
+        setError(errorText(e));
     } finally {
-      setHistoryLoading(false);
+      if (historyRequest.current === controller) {
+        historyRequest.current = null;
+        if (mounted.current) setHistoryLoading(false);
+      }
     }
   };
   const newConversation = () => {
-    if (busy || historyLoading) return;
+    if (activeRequest.current || historyRequest.current) return;
+    ++viewRevision.current;
+    activeConversation.current = null;
+    followBottom.current = true;
     setMessages([]);
     setConversationId(null);
     setStats(null);
     setError("");
+    setAnnouncement("已开启新对话");
+    setShowLatest(false);
     setHistoryOpen(false);
     inputRef.current?.focus();
   };
@@ -161,88 +251,215 @@ function Assistant() {
       setMemorySaving(false);
     }
   };
-  const send = async (text = input) => {
-    const value = text.trim();
-    if (!value || busy || historyLoading) return;
-    setInput("");
-    setBusy(true);
-    setPhase("正在理解你的问题…");
-    setError("");
-    const controller = new AbortController();
-    abort.current = controller;
-    setMessages((items) => [
-      ...items,
-      { role: "user", content: value },
-      { role: "assistant", content: "" },
-    ]);
-    let finished = false;
-    let activeConversationId = conversationId;
-    try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
+  const send = useCallback(
+    async (text?: string) => {
+      const value = (text ?? draft.current).trim();
+      if (!value || activeRequest.current || historyRequest.current) return;
+      if (value.length > 8000) {
+        setError("问题最多支持 8000 个字符，请缩短后再发送。");
+        return;
+      }
+      const id = crypto.randomUUID();
+      const controller = new AbortController();
+      const request = { id, controller };
+      activeRequest.current = request;
+      const revision = ++viewRevision.current;
+      let currentConversationId = activeConversation.current;
+      const ownsRequest = () =>
+        mounted.current && activeRequest.current === request;
+      const updateReply = (
+        update: (item: StreamChatMessage) => StreamChatMessage,
+      ) => {
+        if (ownsRequest())
+          setMessages((items) =>
+            items.map((item) => (item.id === id ? update(item) : item)),
+          );
+      };
+      updateDraft("");
+      setBusy(true);
+      setAnnouncement("问题已发送，正在连接导购");
+      setError("");
+      followBottom.current = true;
+      setMessages((items) => [
+        ...items,
+        { id: `${id}-user`, role: "user", content: value },
+        {
+          id,
+          role: "assistant",
+          content: "",
+          status: "waiting",
+          request: value,
+          phases: [],
         },
-        body: JSON.stringify({ conversationId, message: value }),
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.message || "导购暂时无法回答，请稍后重试。");
-      }
-      if (!response.body) throw new Error("回答连接未建立，请重新发送。");
-      for await (const event of readEvents(response.body)) {
-        if (event.data === "[DONE]") {
-          finished = true;
-          continue;
+      ]);
+      let finished = false;
+      let retryable = true;
+      try {
+        const response = await fetch("/api/ai/chat", {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify({
+            conversationId: currentConversationId,
+            message: value,
+          }),
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          throw new Error(body?.message || "导购暂时无法回答，请稍后重试。");
         }
-        const body = JSON.parse(event.data);
-        if (event.event === "meta" && body.conversationId) {
-          setConversationId(body.conversationId);
-          activeConversationId = body.conversationId;
-        } else if (event.event === "phase")
-          setPhase(body.label || "正在整理回答…");
-        else if (event.event === "delta")
-          setMessages((items) =>
-            items.map((item, index) =>
-              index === items.length - 1
-                ? { ...item, content: item.content + (body.content || "") }
-                : item,
-            ),
+        if (
+          !response.headers
+            .get("Content-Type")
+            ?.toLowerCase()
+            .includes("text/event-stream")
+        ) {
+          throw new Error("回答连接格式异常，请稍后重新发送。");
+        }
+        if (!response.body) throw new Error("回答连接未建立，请重新发送。");
+        for await (const event of readEvents(
+          response.body,
+          controller.signal,
+        )) {
+          if (!ownsRequest() || controller.signal.aborted) break;
+          if (
+            !["meta", "phase", "delta", "sources", "error", "done"].includes(
+              event.event,
+            )
+          )
+            continue;
+          let body;
+          try {
+            body = JSON.parse(event.data);
+          } catch {
+            throw new Error("回答数据格式异常，请重新发送。");
+          }
+          if (!body || typeof body !== "object" || Array.isArray(body))
+            throw new Error("回答数据格式异常，请重新发送。");
+          if (
+            event.event === "meta" &&
+            typeof body.conversationId === "string"
+          ) {
+            setConversationId(body.conversationId);
+            activeConversation.current = body.conversationId;
+            currentConversationId = body.conversationId;
+          } else if (
+            event.event === "phase" &&
+            typeof body.label === "string"
+          ) {
+            const next: PublicPhase = {
+              code: typeof body.code === "string" ? body.code : body.label,
+              label: body.label,
+              status: body.status === "completed" ? "completed" : "running",
+            };
+            updateReply((item) => ({
+              ...item,
+              phases: updatePublicPhases(item.phases || [], next),
+            }));
+            setAnnouncement(body.label);
+          } else if (
+            event.event === "delta" &&
+            typeof body.content === "string"
+          ) {
+            updateReply((item) => ({
+              ...item,
+              status: "streaming",
+              content: item.content + body.content,
+            }));
+          } else if (event.event === "sources" && Array.isArray(body.items)) {
+            const sources: Source[] = body.items.filter(
+              (source: Source) =>
+                source &&
+                typeof source.title === "string" &&
+                typeof source.excerpt === "string",
+            );
+            updateReply((item) => ({ ...item, sources }));
+          } else if (event.event === "error") {
+            retryable = body.retryable !== false;
+            throw new Error(
+              typeof body.message === "string"
+                ? body.message
+                : "回答中断，请重试。",
+            );
+          } else if (event.event === "done") {
+            finished = true;
+            break;
+          }
+        }
+        if (!ownsRequest()) return;
+        if (controller.signal.aborted) {
+          updateReply((item) => ({ ...item, status: "stopped" }));
+          setAnnouncement("本次回答已停止");
+        } else {
+          updateReply((item) => ({
+            ...item,
+            status: finished ? "complete" : "interrupted",
+            phases: finished
+              ? item.phases?.map((phase) => ({ ...phase, status: "completed" }))
+              : item.phases,
+          }));
+          setAnnouncement(
+            finished
+              ? "回答已完成，可查看正文和参考资料"
+              : "回答连接中断，已保留收到的文字",
           );
-        else if (event.event === "sources")
-          setMessages((items) =>
-            items.map((item, index) =>
-              index === items.length - 1
-                ? { ...item, sources: body.items || [] }
-                : item,
-            ),
-          );
-        else if (event.event === "error")
-          throw new Error(body.message || "回答中断，请重试。");
-        else if (event.event === "done") finished = true;
+        }
+      } catch (e) {
+        if (!ownsRequest()) return;
+        const stopped = controller.signal.aborted;
+        updateReply((item) => ({
+          ...item,
+          status: stopped ? "stopped" : "error",
+          issue: stopped ? undefined : errorText(e),
+          retryable,
+        }));
+        setAnnouncement(
+          stopped
+            ? "本次回答已停止"
+            : retryable
+              ? "本次回答未完成，可在该回复下重试"
+              : "本次回答未完成，请查看回复下方的提示",
+        );
+      } finally {
+        if (activeRequest.current === request) {
+          activeRequest.current = null;
+          if (mounted.current) {
+            setBusy(false);
+            void loadConversations();
+            if (finished && currentConversationId) {
+              const completedId = currentConversationId;
+              void api<{ stats?: ConversationStats }>(
+                `/ai/conversations/${completedId}`,
+              )
+                .then((result) => {
+                  if (
+                    mounted.current &&
+                    viewRevision.current === revision &&
+                    activeConversation.current === completedId
+                  )
+                    setStats(result.stats || null);
+                })
+                .catch(() => {});
+            }
+          }
+        }
       }
-      if (!finished) setError("连接已结束，回答可能不完整。你可以继续追问。");
-      void loadConversations();
-      if (activeConversationId)
-        void api<{ stats?: ConversationStats }>(
-          `/ai/conversations/${activeConversationId}`,
-        )
-          .then((result) => setStats(result.stats || null))
-          .catch(() => {});
-    } catch (e) {
-      if (e instanceof Error && e.name === "AbortError")
-        toast.info("已停止本次回答");
-      else {
-        setError(errorText(e));
-        setInput(value);
-      }
-    } finally {
-      setBusy(false);
-      abort.current = null;
-    }
+    },
+    [loadConversations, updateDraft],
+  );
+  const stopResponse = () => {
+    const request = activeRequest.current;
+    if (!request) return;
+    request.controller.abort();
+    setMessages((items) =>
+      items.map((item) =>
+        item.id === request.id ? { ...item, status: "stopped" } : item,
+      ),
+    );
   };
   const history = (
     <>
@@ -301,7 +518,7 @@ function Assistant() {
     </>
   );
   return (
-    <div className="assistant-layout precision-assistant">
+    <div className="assistant-layout precision-assistant stream-assistant">
       <aside className="conversation-sidebar">{history}</aside>
       <section className="chat-workspace">
         <header className="chat-header">
@@ -311,7 +528,11 @@ function Assistant() {
             </span>
             <div>
               <h1>比特导购</h1>
-              <p>{busy ? phase : "把预算、场景与商品资料放在一起考虑。"}</p>
+              <p>
+                {busy
+                  ? "正在为你整理选购信息…"
+                  : "把预算、场景与商品资料放在一起考虑。"}
+              </p>
             </div>
           </div>
           <div className="chat-header-actions">
@@ -333,120 +554,125 @@ function Assistant() {
           </div>
         </header>
         <div
-          className="chat-transcript"
+          className="stream-announcement"
+          role="status"
           aria-live="polite"
-          aria-busy={busy || historyLoading}
+          aria-atomic="true"
         >
-          {historyLoading ? (
-            <div className="chat-loading">
-              <Skeleton active paragraph={{ rows: 4 }} />
-              <p>正在找回对话</p>
-            </div>
-          ) : !messages.length ? (
-            <div className="chat-welcome">
-              <div className="welcome-intro">
-                <span className="welcome-mark">
-                  <ChatCircleDots size={36} weight="duotone" />
-                </span>
-                <span className="welcome-label">你的专属选购空间</span>
-              </div>
-              <h2>
-                想选得明白，
-                <br />
-                我们一起看看。
-              </h2>
-              <p>
-                从预算、使用习惯或一件心仪商品开始。
-                我会查阅资料，帮你找到适合自己的选择。
-              </p>
-              <div className="suggestion-grid">
-                {[
-                  {
-                    title: "通勤耳机",
-                    detail: "预算 300 元，听听怎么选",
-                    question: "预算 300 元，帮我挑一副通勤耳机",
-                    icon: <Headphones size={23} />,
-                  },
-                  {
-                    title: "舒适生活",
-                    detail: "让出租屋多一点舒服",
-                    question: "想让出租屋更舒适，有哪些实用好物？",
-                    icon: <House size={23} />,
-                  },
-                  {
-                    title: "办公桌面",
-                    detail: "久坐办公，也能得心应手",
-                    question: "每天久坐办公，怎么搭配桌面装备？",
-                    icon: <Desktop size={23} />,
-                  },
-                  {
-                    title: "一人食厨房",
-                    detail: "简单做饭，轻松收拾",
-                    question: "帮我选适合一个人做饭的厨具",
-                    icon: <CookingPot size={23} />,
-                  },
-                ].map(({ title, detail, question, icon }) => (
-                  <button
-                    key={title}
-                    onClick={() => void send(question)}
-                    disabled={busy || historyLoading}
-                  >
-                    <span className="suggestion-icon">{icon}</span>
-                    <span className="suggestion-copy">
-                      <strong>{title}</strong>
-                      <small>{detail}</small>
+          {announcement}
+        </div>
+        <div className="stream-scroll-region">
+          <div
+            ref={transcript}
+            className="chat-transcript"
+            aria-label="导购对话"
+            aria-live="off"
+            onScroll={(event) => {
+              if (!hasMessages) {
+                setShowLatest(false);
+                return;
+              }
+              const element = event.currentTarget;
+              const nearBottom =
+                element.scrollHeight -
+                  element.clientHeight -
+                  element.scrollTop <=
+                96;
+              followBottom.current = nearBottom;
+              setShowLatest(!nearBottom);
+            }}
+          >
+            <div ref={transcriptContent}>
+              {historyLoading ? (
+                <div className="chat-loading">
+                  <Skeleton active paragraph={{ rows: 4 }} />
+                  <p>正在找回对话</p>
+                </div>
+              ) : !messages.length ? (
+                <div className="chat-welcome">
+                  <div className="welcome-intro">
+                    <span className="welcome-mark">
+                      <ChatCircleDots size={36} weight="duotone" />
                     </span>
-                    <ArrowRight size={18} />
-                  </button>
-                ))}
-              </div>
-              <p className="assistant-intro">
-                <BookOpenText size={17} />
-                参考说明书与实际在售商品，答案附可查看的资料。
-              </p>
-            </div>
-          ) : (
-            <div className="message-list">
-              {messages.map((item, index) => (
-                <article
-                  key={index}
-                  className={`chat-message ${item.role === "user" ? "user-message" : "assistant-message"}`}
-                >
-                  <div className="message-author">
-                    {item.role === "user" ? (
-                      "你"
-                    ) : (
-                      <>
-                        <ChatCircleDots size={18} />
-                        比特导购
-                      </>
-                    )}
+                    <span className="welcome-label">你的专属选购空间</span>
                   </div>
-                  <div className="message-content">
-                    {!item.content && busy && index === messages.length - 1 ? (
-                      <span className="thinking">
-                        <Spin size="small" />
-                        {phase}
-                      </span>
-                    ) : (
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          a: (props) => (
-                            <a {...props} target="_blank" rel="noreferrer" />
-                          ),
-                          img: () => null,
-                        }}
+                  <h2>
+                    想选得明白，
+                    <br />
+                    我们一起看看。
+                  </h2>
+                  <p>
+                    从预算、使用习惯或一件心仪商品开始。
+                    我会查阅资料，帮你找到适合自己的选择。
+                  </p>
+                  <div className="suggestion-grid">
+                    {[
+                      {
+                        title: "通勤耳机",
+                        detail: "预算 300 元，听听怎么选",
+                        question: "预算 300 元，帮我挑一副通勤耳机",
+                        icon: <Headphones size={23} />,
+                      },
+                      {
+                        title: "舒适生活",
+                        detail: "让出租屋多一点舒服",
+                        question: "想让出租屋更舒适，有哪些实用好物？",
+                        icon: <House size={23} />,
+                      },
+                      {
+                        title: "办公桌面",
+                        detail: "久坐办公，也能得心应手",
+                        question: "每天久坐办公，怎么搭配桌面装备？",
+                        icon: <Desktop size={23} />,
+                      },
+                      {
+                        title: "一人食厨房",
+                        detail: "简单做饭，轻松收拾",
+                        question: "帮我选适合一个人做饭的厨具",
+                        icon: <CookingPot size={23} />,
+                      },
+                    ].map(({ title, detail, question, icon }) => (
+                      <button
+                        key={title}
+                        onClick={() => void send(question)}
+                        disabled={busy || historyLoading}
                       >
-                        {item.content || "本次回答未完成。"}
-                      </ReactMarkdown>
-                    )}
+                        <span className="suggestion-icon">{icon}</span>
+                        <span className="suggestion-copy">
+                          <strong>{title}</strong>
+                          <small>{detail}</small>
+                        </span>
+                        <ArrowRight size={18} />
+                      </button>
+                    ))}
                   </div>
-                  {!!item.sources?.length && <Sources sources={item.sources} />}
-                </article>
-              ))}
-              <div ref={end} />
+                  <p className="assistant-intro">
+                    <BookOpenText size={17} />
+                    参考说明书与实际在售商品，答案附可查看的资料。
+                  </p>
+                </div>
+              ) : (
+                <div className="message-list">
+                  {messages.map((item) => (
+                    <AssistantStreamMessage
+                      key={item.id}
+                      item={item}
+                      onRetry={send}
+                      retryDisabled={busy || historyLoading}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
+          </div>
+          {showLatest && messages.length > 0 && (
+            <Button
+              className="latest-reply-button"
+              icon={<ArrowDown size={16} />}
+              onClick={jumpToLatest}
+            >
+              回到最新
+            </Button>
           )}
         </div>
         <div className="chat-composer-area">
@@ -514,38 +740,60 @@ function Assistant() {
               id="bit-assistant-input"
               ref={inputRef}
               aria-label="发送给导购的问题"
+              aria-describedby="stream-input-hint"
               value={input}
-              onChange={(event) => setInput(event.target.value)}
+              onChange={(event) => updateDraft(event.target.value)}
               placeholder="告诉我你想选什么，或说说你的使用习惯…"
-              autoSize={{ minRows: 1, maxRows: 5 }}
-              maxLength={12000}
+              autoSize={{ minRows: 2, maxRows: 5 }}
+              maxLength={8000}
               onKeyDown={(event) => {
                 if (
                   event.key === "Enter" &&
                   !event.shiftKey &&
-                  !event.nativeEvent.isComposing
+                  !event.nativeEvent.isComposing &&
+                  !busy &&
+                  window.matchMedia("(hover: hover) and (pointer: fine)")
+                    .matches
                 ) {
                   event.preventDefault();
                   void send();
                 }
               }}
             />
-            {busy ? (
-              <Button
-                type="primary"
-                aria-label="停止生成"
-                icon={<Stop size={19} weight="fill" />}
-                onClick={() => abort.current?.abort()}
-              />
-            ) : (
-              <Button
-                type="primary"
-                htmlType="submit"
-                aria-label="发送问题"
-                disabled={!input.trim() || historyLoading}
-                icon={<ArrowRight size={21} />}
-              />
-            )}
+            <div className="composer-toolbar">
+              <span id="stream-input-hint" className="composer-context">
+                <BookOpenText size={15} />
+                {busy
+                  ? "回答中，也可以准备下一条问题"
+                  : "预算、场景、偏好，都可以聊"}
+              </span>
+              <div className="composer-send-actions">
+                {input.length >= 7600 && (
+                  <span
+                    className="composer-character-count"
+                    aria-label={`已输入 ${input.length} 个字符，最多 8000 个字符`}
+                  >
+                    {input.length.toLocaleString()} / 8,000
+                  </span>
+                )}
+                {busy ? (
+                  <Button
+                    type="primary"
+                    aria-label="停止生成"
+                    icon={<Stop size={19} weight="fill" />}
+                    onClick={stopResponse}
+                  />
+                ) : (
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    aria-label="发送问题"
+                    disabled={!input.trim() || historyLoading}
+                    icon={<ArrowUp size={21} />}
+                  />
+                )}
+              </div>
+            </div>
           </form>
           <p className="composer-note">
             <span>AI 建议供选购参考，价格与库存以商品页为准。</span>
@@ -648,62 +896,5 @@ function Assistant() {
         )}
       </Drawer>
     </div>
-  );
-}
-function Sources({ sources }: { sources: Source[] }) {
-  return (
-    <div className="answer-sources">
-      <Collapse
-        ghost
-        size="small"
-        items={[
-          {
-            key: "sources",
-            label: (
-              <span className="source-label">
-                <BookOpenText size={16} />
-                参考商品资料{" "}
-                <span className="source-count">{sources.length}</span>
-              </span>
-            ),
-            children: (
-              <div className="source-list">
-                {sources.map((source, index) => (
-                  <div
-                    key={`${source.productId}-${index}`}
-                    className="source-item"
-                  >
-                    <div className="source-item-heading">
-                      <FileSourceIcon />
-                      <strong>{source.title}</strong>
-                    </div>
-                    <p>{source.excerpt}</p>
-                    <details className="source-full">
-                      <summary>展开完整摘录</summary>
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {source.excerpt}
-                      </ReactMarkdown>
-                    </details>
-                    {source.productId && (
-                      <Link href={`/products/${source.productId}`}>
-                        查看商品 <ArrowRight size={15} />
-                      </Link>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ),
-          },
-        ]}
-      />
-    </div>
-  );
-}
-
-function FileSourceIcon() {
-  return (
-    <span className="source-document-icon">
-      <Check size={15} />
-    </span>
   );
 }

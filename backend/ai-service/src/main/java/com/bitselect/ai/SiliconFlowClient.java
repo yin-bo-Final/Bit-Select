@@ -35,37 +35,38 @@ public class SiliconFlowClient {
 
   public static final class RequestControl {
     private final AtomicBoolean cancelled = new AtomicBoolean();
-    private final AtomicReference<InputStream> stream = new AtomicReference<>();
-    private final AtomicReference<Thread> worker = new AtomicReference<>();
+    private final Set<InputStream> streams = ConcurrentHashMap.newKeySet();
+    private final Set<Thread> workers = ConcurrentHashMap.newKeySet();
 
     public void cancel() {
       cancelled.set(true);
-      InputStream input = stream.getAndSet(null);
-      if (input != null)
+      for (Thread worker : workers) worker.interrupt();
+      for (InputStream input : streams)
         try {
           input.close();
         } catch (IOException ignored) {
         }
-      Thread owner = worker.get();
-      if (owner != null) owner.interrupt();
     }
 
     void bind() {
-      worker.set(Thread.currentThread());
+      workers.add(Thread.currentThread());
       check();
     }
 
     void attach(InputStream input) {
-      stream.set(input);
+      streams.add(input);
       if (cancelled.get()) {
         cancel();
         throw new CancellationException("MODEL_REQUEST_CANCELLED");
       }
     }
 
-    void detach() {
-      stream.set(null);
-      worker.set(null);
+    void detach(InputStream input) {
+      streams.remove(input);
+    }
+
+    void unbind() {
+      workers.remove(Thread.currentThread());
     }
 
     void check() {
@@ -80,12 +81,26 @@ public class SiliconFlowClient {
 
   public void bindRequest(RequestControl control) {
     requestControl.set(control);
-    control.bind();
+    try {
+      control.bind();
+    } catch (RuntimeException e) {
+      clearRequest();
+      throw e;
+    }
+  }
+
+  public RequestControl currentRequestControl() {
+    return requestControl.get();
+  }
+
+  public void checkRequest() {
+    RequestControl control = requestControl.get();
+    if (control != null) control.check();
   }
 
   public void clearRequest() {
     RequestControl control = requestControl.get();
-    if (control != null) control.detach();
+    if (control != null) control.unbind();
     requestControl.remove();
   }
 
@@ -124,6 +139,7 @@ public class SiliconFlowClient {
 
   private JsonNode post(String path, Object body) throws Exception {
     var r = http.send(request(path, body), HttpResponse.BodyHandlers.ofString());
+    checkRequest();
     if (r.statusCode() != 200) throw new IllegalStateException("MODEL_HTTP_" + r.statusCode());
     return mapper.readTree(r.body());
   }
@@ -158,6 +174,7 @@ public class SiliconFlowClient {
     final RequestControl active = control;
     ScheduledFuture<?> deadline =
         DEADLINES.schedule(active::cancel, streamTimeoutSeconds, TimeUnit.SECONDS);
+    InputStream input = null;
     try {
       var r =
           http.send(
@@ -175,20 +192,32 @@ public class SiliconFlowClient {
                       "stream",
                       true)),
               HttpResponse.BodyHandlers.ofInputStream());
-      active.attach(r.body());
+      input = r.body();
+      active.attach(input);
       if (r.statusCode() != 200) {
         r.body().close();
         throw new IllegalStateException("MODEL_HTTP_" + r.statusCode());
       }
       StringBuilder answer = new StringBuilder();
       boolean finished = false;
+      StringBuilder frame = new StringBuilder();
       try (var reader =
           new BufferedReader(new InputStreamReader(r.body(), StandardCharsets.UTF_8))) {
         String line;
         while ((line = reader.readLine()) != null) {
           active.check();
-          if (!line.startsWith("data:")) continue;
-          String value = line.substring(5).strip();
+          if (!line.isEmpty()) {
+            if (line.startsWith("data:")) {
+              if (!frame.isEmpty()) frame.append('\n');
+              frame.append(line.substring(5).stripLeading());
+              if (frame.length() > 1_048_576)
+                throw new IllegalStateException("MODEL_STREAM_FRAME_TOO_LARGE");
+            }
+            continue;
+          }
+          if (frame.isEmpty()) continue;
+          String value = frame.toString().strip();
+          frame.setLength(0);
           if (value.equals("[DONE]")) {
             finished = true;
             break;
@@ -196,8 +225,10 @@ public class SiliconFlowClient {
           var node = mapper.readTree(value);
           if (node.has("error")) throw new IllegalStateException("MODEL_STREAM_ERROR");
           var choice = node.path("choices").path(0);
-          if (!choice.path("finish_reason").isMissingNode()
-              && !choice.path("finish_reason").isNull()) finished = true;
+          String reason = choice.path("finish_reason").asText("");
+          if (!reason.isEmpty() && !reason.equals("stop"))
+            throw new IllegalStateException(
+                reason.equals("length") ? "MODEL_RESPONSE_LIMIT" : "MODEL_RESPONSE_INCOMPLETE");
           String text = choice.path("delta").path("content").asText("");
           if (!text.isEmpty()) {
             answer.append(text);
@@ -211,6 +242,13 @@ public class SiliconFlowClient {
       return answer.toString();
     } finally {
       deadline.cancel(false);
+      if (input != null) {
+        active.detach(input);
+        try {
+          input.close();
+        } catch (IOException ignored) {
+        }
+      }
       if (temporary) clearRequest();
     }
   }

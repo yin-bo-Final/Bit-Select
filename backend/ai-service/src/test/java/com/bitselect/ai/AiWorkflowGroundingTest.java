@@ -13,6 +13,59 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class AiWorkflowGroundingTest {
   @Test
+  void partialStreamIsNeverSavedAndSavePhaseOnlyCompletesAfterCommit() throws Exception {
+    var model = mock(SiliconFlowClient.class);
+    var store = mock(ConversationStore.class);
+    var mapper = new ObjectMapper();
+    var workflow =
+        new AiWorkflow(
+            model, store, mock(MemoryService.class), mock(RetrievalService.class), mapper);
+    when(model.complete(anyList(), eq(500))).thenReturn("hello");
+    when(model.complete(anyList(), eq(200))).thenReturn("{\"intent\":\"general\"}");
+    when(model.json(anyString())).thenAnswer(call -> mapper.readTree((String) call.getArgument(0)));
+    when(store.context(anyLong(), anyString(), anyString(), anyString())).thenReturn(List.of());
+    List<String> phases = new ArrayList<>();
+    java.util.function.BiConsumer<String, Object> events =
+        (event, data) -> {
+          if (event.equals("phase")) {
+            var phase = (Map<?, ?>) data;
+            assertNotNull(phase.get("label"));
+            phases.add(phase.get("code") + ":" + phase.get("status"));
+          }
+        };
+    when(model.stream(anyList(), any()))
+        .thenThrow(new IllegalStateException("MODEL_STREAM_TRUNCATED"));
+    assertThrows(IllegalStateException.class, () -> workflow.run(1, "owned", "hello", events));
+    verify(store, never()).save(anyLong(), anyString(), anyString(), anyString(), any());
+    assertFalse(phases.contains("compose:completed"));
+    assertFalse(phases.contains("save:running"));
+    phases.clear();
+    doReturn("complete answer").when(model).stream(anyList(), any());
+    doAnswer(
+            call -> {
+              assertTrue(phases.contains("save:running"));
+              assertFalse(phases.contains("save:completed"));
+              return null;
+            })
+        .when(store)
+        .save(anyLong(), anyString(), anyString(), anyString(), any());
+    workflow.run(1, "owned", "hello", events);
+    assertEquals(
+        List.of(
+            "rewrite:running",
+            "rewrite:completed",
+            "intent:running",
+            "intent:completed",
+            "retrieve:running",
+            "retrieve:completed",
+            "compose:running",
+            "compose:completed",
+            "save:running",
+            "save:completed"),
+        phases);
+  }
+
+  @Test
   void introductionDoesNotRetrieveRandomProductManuals() throws Exception {
     var model = mock(SiliconFlowClient.class);
     var store = mock(ConversationStore.class);

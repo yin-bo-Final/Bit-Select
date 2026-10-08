@@ -59,7 +59,10 @@
 
 以下均要求登录，身份只从服务端会话读取。普通用户只能访问自己的会话与记忆。
 
-- `POST /ai/chat` `{conversationId?,message}`：流式 SSE，事件依次包含 `meta {conversationId}`、`phase {label}`、`sources {items}`、多条 `delta {content}`、`done {conversationId}`；失败返回 `error {message}`。同一会话未完成时返回 409，单实例并发满时返回 429，未配置模型返回 503。
+- `POST /ai/chat` `{conversationId?,message}`：POST SSE，`message` 非空且最多 8,000 字符，响应类型 `text/event-stream`。同一会话未完成时返回 409，单实例并发满时返回 429，未配置模型返回 503。浏览器用携带 Cookie 的 `fetch` 读取响应流，不自动重发生成请求。
+- 事件为 `meta {conversationId}`、`phase {code,status,label}`、`sources {items}`、多条 `delta {content}`，最后以 `done {conversationId}` 或 `error {code,message,retryable,partial}` 终止。`phase.code` 包含 `rewrite`、`intent`、`retrieve`、`compose`、`save`，`status` 为 `running|completed`；这些是公开执行阶段，不包含模型内部推理内容。`label` 保持兼容原前端。
+- `delta` 直接转发上游新到达的正文片段，不等待全文、不使用定时器模拟输出。只有上游正常完成且完整轮次持久化成功后才发送 `done`；连接结束但未收到 `done` 必须视为未完成。失败、输出截断或用户停止时，界面保留已收到的部分文字并标示状态，不将其作为完整历史。
+- 心跳为 SSE 注释，不是正文事件。响应禁止缓存与代理转换，并发送 `X-Accel-Buffering: no`；Next.js 转发超时为 240 秒，高于 AI 请求截止时间。客户端停止或连接断开后取消上游请求，工作线程清理完毕再释放并发名额与会话锁。
 - `GET /ai/conversations` → `{items:[{id,title,updatedAt}]}`。
 - `GET /ai/conversations/{id}` → `{id,title,messages:[{role,content,createdAt,sources?}],stats:{contextCapacity,summaryThrough,summaryPresent,tokenizer}}`。引用随回答持久保存；`summaryThrough` 为摘要覆盖的数据库消息 ID，不是 token 数。
 - `GET /ai/memories` → `{items:[{id,content,source,confidence,updatedAt}],enabled}`。

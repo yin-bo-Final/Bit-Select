@@ -1,0 +1,444 @@
+/* A quiet streaming workspace. All motion reflects live request state. */
+.stream-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.stream-scroll-region {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.precision-assistant.stream-assistant .chat-transcript {
+  width: 100%;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+}
+.precision-assistant.stream-assistant .message-list {
+  max-width: 832px;
+  padding: 30px 36px 20px;
+}
+.precision-assistant.stream-assistant .chat-message {
+  margin-bottom: 34px;
+  animation: none;
+}
+.precision-assistant.stream-assistant .user-message {
+  padding: 14px 18px 10px;
+  border: 1px solid var(--line);
+  background: var(--subtle);
+}
+.precision-assistant.stream-assistant .message-content {
+  overflow-wrap: anywhere;
+}
+.user-plain-text {
+  white-space: pre-wrap;
+}
+.precision-assistant.stream-assistant .message-author {
+  margin-bottom: 10px;
+}
+.precision-assistant.stream-assistant
+  .assistant-message
+  .message-content:empty {
+  display: none;
+}
+.message-content.is-streaming > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 5px;
+  vertical-align: -0.12em;
+  background: var(--accent);
+  animation: stream-caret 1.05s step-end infinite;
+}
+.response-progress {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.response-progress summary,
+.stream-sources summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 0;
+  cursor: pointer;
+  list-style: none;
+  border-radius: 4px;
+}
+.response-progress summary::-webkit-details-marker,
+.stream-sources summary::-webkit-details-marker {
+  display: none;
+}
+.response-progress summary:focus-visible,
+.stream-sources summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.response-progress summary > svg,
+.stream-sources summary > svg {
+  flex-shrink: 0;
+}
+.response-progress[data-active="true"] > summary > svg:first-child {
+  color: var(--accent);
+}
+.response-spinner {
+  animation: stream-rotate 1.2s linear infinite;
+}
+.response-phase-count {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.response-disclosure,
+.stream-sources summary > svg:last-child {
+  transition: transform 160ms ease;
+}
+.response-progress[open] > summary .response-disclosure,
+.stream-sources[open] > summary > svg:last-child,
+.stream-source-detail[open] > summary > svg:last-child {
+  transform: rotate(180deg);
+}
+.response-phase-list {
+  display: grid;
+  gap: 13px;
+  margin: 10px 0 6px 7px;
+  padding: 8px 0 8px 16px;
+  list-style: none;
+  border-left: 1px solid var(--line);
+  max-width: 440px;
+}
+.response-phase-list li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  line-height: 1.6;
+}
+.response-phase-list li > svg {
+  flex-shrink: 0;
+}
+.response-phase-list li > small {
+  margin-left: auto;
+  padding-left: 12px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.response-phase-list li[data-current="true"] {
+  color: var(--text);
+}
+.response-phase-list li[data-current="true"] > svg {
+  color: var(--accent);
+}
+.response-connecting {
+  padding: 7px 0 2px 24px;
+  margin: 0;
+}
+.stream-sources {
+  margin-top: 18px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.stream-source-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 10px var(--font-mono);
+}
+.stream-sources > ol {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.stream-sources > ol > li {
+  border-bottom: 1px solid var(--line);
+}
+.stream-source-detail > summary {
+  width: 100%;
+  gap: 10px;
+  padding: 12px 2px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.stream-source-detail > summary > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.stream-source-index {
+  flex-shrink: 0;
+  color: var(--muted);
+  font: 10px var(--font-mono);
+  min-width: 16px;
+}
+.stream-source-excerpt {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--subtle);
+  font-size: 12px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+.stream-source-excerpt p {
+  margin: 0 0 10px;
+}
+.stream-source-excerpt h1,
+.stream-source-excerpt h2,
+.stream-source-excerpt h3 {
+  font-size: 13px;
+  margin: 14px 0 8px;
+}
+.stream-source-excerpt table,
+.stream-source-excerpt pre {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.stream-source-excerpt > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  color: var(--accent);
+}
+.message-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+}
+.precision-assistant.stream-assistant .message-actions .ant-btn {
+  min-height: 32px;
+  padding: 3px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  border-radius: 7px;
+}
+.precision-assistant.stream-assistant .message-actions .ant-btn:hover {
+  color: var(--text);
+  background: var(--subtle);
+}
+.reply-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.75;
+}
+.reply-notice > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.reply-notice small {
+  display: block;
+  margin-top: 3px;
+  font-size: inherit;
+  overflow-wrap: anywhere;
+}
+.empty-reply {
+  color: var(--muted);
+}
+.latest-reply-button.ant-btn {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 20px;
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  z-index: 1;
+}
+.precision-assistant.stream-assistant .chat-composer-area {
+  padding-top: 12px;
+}
+.precision-assistant.stream-assistant .chat-composer {
+  display: block;
+  padding: 15px 17px 11px;
+  background: var(--surface);
+}
+.precision-assistant.stream-assistant .composer-label {
+  display: block;
+  margin-bottom: 8px;
+}
+.precision-assistant.stream-assistant .chat-composer .ant-input {
+  font-size: 14px;
+  line-height: 1.75;
+}
+.composer-toolbar,
+.composer-send-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.composer-toolbar {
+  justify-content: space-between;
+  margin-top: 10px;
+}
+.composer-context {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.composer-context > svg {
+  flex-shrink: 0;
+}
+.composer-send-actions {
+  flex-shrink: 0;
+  gap: 10px;
+}
+.composer-character-count {
+  font: 10px var(--font-mono);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.precision-assistant.stream-assistant .composer-send-actions > .ant-btn {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+@keyframes stream-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes stream-caret {
+  50% {
+    opacity: 0;
+  }
+}
+@media (min-width: 769px) and (max-height: 800px) {
+  .precision-assistant.stream-assistant .chat-welcome {
+    max-width: 720px;
+    padding: 20px 32px;
+  }
+  .precision-assistant.stream-assistant .welcome-intro {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .precision-assistant.stream-assistant .welcome-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+  .precision-assistant.stream-assistant .welcome-mark svg {
+    width: 22px;
+    height: 22px;
+  }
+  .precision-assistant.stream-assistant .chat-welcome h2 {
+    font-size: 24px;
+    margin-bottom: 8px;
+  }
+  .precision-assistant.stream-assistant .chat-welcome h2 br {
+    display: none;
+  }
+  .precision-assistant.stream-assistant .chat-welcome > p {
+    max-width: 540px;
+    font-size: 12px;
+  }
+  .precision-assistant.stream-assistant .suggestion-grid {
+    margin: 18px 0 14px;
+  }
+  .precision-assistant.stream-assistant .suggestion-grid button {
+    padding: 12px;
+  }
+  .precision-assistant.stream-assistant .chat-welcome .assistant-intro {
+    font-size: 11px;
+  }
+}
+@media (max-width: 768px) {
+  .precision-assistant.stream-assistant .message-list {
+    padding: 24px 20px 16px;
+  }
+  .precision-assistant.stream-assistant .chat-composer-area {
+    padding: 10px 16px 12px;
+  }
+  .precision-assistant.stream-assistant .chat-composer .ant-input {
+    font-size: 16px;
+  }
+  .precision-assistant.stream-assistant .chat-composer {
+    padding: 13px 14px 10px;
+  }
+  .precision-assistant.stream-assistant .composer-send-actions > .ant-btn {
+    width: 42px;
+    height: 42px;
+  }
+}
+@media (max-width: 480px) {
+  .precision-assistant.stream-assistant .chat-header {
+    padding: 15px 16px;
+    gap: 8px;
+  }
+  .precision-assistant.stream-assistant .chat-title p {
+    max-width: 185px;
+    line-height: 1.7;
+  }
+  .precision-assistant.stream-assistant .message-list {
+    padding: 22px 16px 14px;
+  }
+  .precision-assistant.stream-assistant .user-message {
+    max-width: 94%;
+    padding: 12px 14px 8px;
+  }
+  .precision-assistant.stream-assistant .chat-composer-area {
+    padding: 9px 10px 10px;
+  }
+  .precision-assistant.stream-assistant .composer-label {
+    margin-bottom: 6px;
+  }
+  .composer-context {
+    font-size: 10px;
+    gap: 5px;
+  }
+  .composer-character-count {
+    font-size: 9px;
+  }
+  .composer-toolbar,
+  .composer-send-actions {
+    gap: 7px;
+  }
+  .response-phase-count {
+    display: none;
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .precision-assistant.stream-assistant .composer-shortcut {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .response-spinner,
+  .message-content.is-streaming > :last-child::after {
+    animation: none;
+  }
+  .response-disclosure,
+  .stream-sources summary > svg:last-child {
+    transition: none;
+  }
+}

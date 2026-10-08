@@ -7,7 +7,7 @@ import jakarta.validation.constraints.*;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicBoolean;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +24,12 @@ public class AiController {
   private final StringRedisTemplate redis;
   private final SiliconFlowClient model;
   private final Semaphore capacity = new Semaphore(3);
+
+  @Value("${ai.request-timeout-seconds:170}")
+  private long requestTimeoutSeconds = 170;
+
+  @Value("${ai.heartbeat-seconds:15}")
+  private long heartbeatSeconds = 15;
 
   public AiController(
       SessionService sessions,
@@ -64,75 +70,29 @@ public class AiController {
       capacity.release();
       throw e;
     }
-    SseEmitter emitter = new SseEmitter(180000L);
-    AtomicBoolean closed = new AtomicBoolean(false),
-        released = new AtomicBoolean(false),
-        finished = new AtomicBoolean(false);
     var control = model.newRequestControl();
-    Runnable release =
-        () -> {
-          if (released.compareAndSet(false, true)) capacity.release();
-        };
-    Runnable abort =
-        () -> {
-          closed.set(true);
-          control.cancel();
-          release.run();
-        };
-    emitter.onTimeout(abort);
-    emitter.onCompletion(
-        () -> {
-          if (!finished.get()) abort.run();
-          else closed.set(true);
-        });
-    emitter.onError(e -> abort.run());
-    var deadline =
-        java.util.concurrent.CompletableFuture.runAsync(
-            () -> {
-              if (!finished.get()) {
-                abort.run();
-                emitter.complete();
-              }
-            },
-            java.util.concurrent.CompletableFuture.delayedExecutor(
-                170, java.util.concurrent.TimeUnit.SECONDS));
+    var stream =
+        new ChatStream(
+            control,
+            Duration.ofSeconds(Math.max(1, requestTimeoutSeconds)),
+            Duration.ofSeconds(Math.max(1, heartbeatSeconds)));
     Thread.startVirtualThread(
         () -> {
-          java.util.function.BiConsumer<String, Object> send =
-              (event, data) -> {
-                if (closed.get()) throw new IllegalStateException("CLIENT_CLOSED");
-                try {
-                  emitter.send(SseEmitter.event().name(event).data(data));
-                } catch (Exception e) {
-                  throw new IllegalStateException("CLIENT_CLOSED");
-                }
-              };
           try {
             model.bindRequest(control);
-            send.accept("meta", Map.of("conversationId", conversation));
-            workflow.run(user, conversation, body.message(), send);
-            send.accept("done", Map.of("conversationId", conversation));
-            finished.set(true);
-            emitter.complete();
+            stream.send("meta", Map.of("conversationId", conversation));
+            workflow.run(user, conversation, body.message(), stream::send);
+            stream.succeed(conversation);
           } catch (Exception e) {
-            if (!closed.get())
-              try {
-                send.accept("error", Map.of("message", "暂时无法完成回答，请稍后重试；商品交易服务不受影响。"));
-                finished.set(true);
-                emitter.complete();
-              } catch (Exception ignored) {
-              }
+            stream.fail("AI_FAILED", "暂时无法完成回答，请重试；未完成的回答不会写入会话。");
             org.slf4j.LoggerFactory.getLogger(getClass())
                 .warn(
                     "AI request failed for conversation {}: {}",
                     conversation,
                     e.getClass().getSimpleName());
           } finally {
-            finished.set(true);
-            deadline.cancel(false);
             model.clearRequest();
             Thread.interrupted();
-            release.run();
             try {
               redis.execute(
                   new DefaultRedisScript<>(
@@ -144,10 +104,13 @@ public class AiController {
             } catch (Exception e) {
               org.slf4j.LoggerFactory.getLogger(getClass())
                   .warn("Conversation lock cleanup deferred to TTL");
+            } finally {
+              // Do not admit another generation until the cancelled worker has actually stopped.
+              capacity.release();
             }
           }
         });
-    return emitter;
+    return stream.emitter();
   }
 
   @GetMapping("/conversations")
