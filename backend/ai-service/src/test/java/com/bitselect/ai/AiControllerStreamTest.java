@@ -60,6 +60,8 @@ class AiControllerStreamTest {
     when(redis.opsForValue()).thenReturn(values);
     when(values.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
     var workflow = mock(AiWorkflow.class);
+    var traces = mock(OpsTraceStore.class);
+    when(traces.begin(anyLong(), anyString(), anyString())).thenReturn(OpsTraceStore.NOOP);
     when(workflow.run(eq(7L), eq("owned-conversation"), anyString(), any()))
         .thenAnswer(
             call -> {
@@ -79,7 +81,7 @@ class AiControllerStreamTest {
             mock(KnowledgeService.class),
             workflow,
             redis,
-            model);
+            model, traces);
     mvc = MockMvcBuilders.standaloneSetup(controller).build();
   }
 

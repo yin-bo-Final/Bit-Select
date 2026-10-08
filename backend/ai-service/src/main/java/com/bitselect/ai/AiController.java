@@ -23,6 +23,7 @@ public class AiController {
   private final AiWorkflow workflow;
   private final StringRedisTemplate redis;
   private final SiliconFlowClient model;
+  private final OpsTraceStore traces;
   private final Semaphore capacity = new Semaphore(3);
 
   @Value("${ai.request-timeout-seconds:170}")
@@ -38,7 +39,8 @@ public class AiController {
       KnowledgeService knowledge,
       AiWorkflow workflow,
       StringRedisTemplate redis,
-      SiliconFlowClient model) {
+      SiliconFlowClient model,
+      OpsTraceStore traces) {
     this.sessions = sessions;
     this.conversations = conversations;
     this.memory = memory;
@@ -46,6 +48,7 @@ public class AiController {
     this.workflow = workflow;
     this.redis = redis;
     this.model = model;
+    this.traces = traces;
   }
 
   public record ChatRequest(String conversationId, @NotBlank @Size(max = 8000) String message) {}
@@ -71,16 +74,26 @@ public class AiController {
       throw e;
     }
     var control = model.newRequestControl();
+    OpsTraceStore.Trace trace = OpsTraceStore.NOOP;
+    try {
+      trace = traces.begin(user, conversation, body.message());
+    } catch (RuntimeException ignored) {
+      // Observability is never a prerequisite for serving the accepted request.
+    }
+    final var requestTrace = trace;
     var stream =
         new ChatStream(
             control,
             Duration.ofSeconds(Math.max(1, requestTimeoutSeconds)),
-            Duration.ofSeconds(Math.max(1, heartbeatSeconds)));
+            Duration.ofSeconds(Math.max(1, heartbeatSeconds)), requestTrace);
     Thread.startVirtualThread(
         () -> {
           try {
             model.bindRequest(control);
-            stream.send("meta", Map.of("conversationId", conversation));
+            var metadata = new LinkedHashMap<String, Object>();
+            metadata.put("conversationId", conversation);
+            metadata.put("requestId", requestTrace.id());
+            stream.send("meta", metadata);
             workflow.run(user, conversation, body.message(), stream::send);
             stream.succeed(conversation);
           } catch (Exception e) {

@@ -37,13 +37,19 @@ final class ChatStream {
   private final AtomicBoolean partial = new AtomicBoolean();
   private final ReentrantLock eventWriteLock = new ReentrantLock();
   private final SiliconFlowClient.RequestControl control;
+  private final OpsTraceStore.Trace trace;
   private final SseEmitter emitter;
   private final ScheduledFuture<?> deadline;
   private final Thread heartbeat;
 
   ChatStream(
       SiliconFlowClient.RequestControl control, Duration timeout, Duration heartbeatInterval) {
-    this(control, timeout, heartbeatInterval, emitter(timeout));
+    this(control, timeout, heartbeatInterval, emitter(timeout), OpsTraceStore.NOOP);
+  }
+
+  ChatStream(SiliconFlowClient.RequestControl control, Duration timeout,
+      Duration heartbeatInterval, OpsTraceStore.Trace trace) {
+    this(control, timeout, heartbeatInterval, emitter(timeout), trace);
   }
 
   private static SseEmitter emitter(Duration timeout) {
@@ -63,8 +69,14 @@ final class ChatStream {
       Duration timeout,
       Duration heartbeatInterval,
       SseEmitter emitter) {
+    this(control, timeout, heartbeatInterval, emitter, OpsTraceStore.NOOP);
+  }
+
+  ChatStream(SiliconFlowClient.RequestControl control, Duration timeout,
+      Duration heartbeatInterval, SseEmitter emitter, OpsTraceStore.Trace trace) {
     this.control = control;
     this.emitter = emitter;
+    this.trace = trace;
     emitter.onTimeout(() -> fail("AI_TIMEOUT", "回答超时，请重试。未完成的回答不会写入会话。"));
     emitter.onError(error -> cancel());
     emitter.onCompletion(
@@ -109,6 +121,7 @@ final class ChatStream {
     eventWriteLock.lock();
     try {
       if (state.get() != State.OPEN) throw new CancellationException("CLIENT_CLOSED");
+      observe(() -> trace.event(event, data));
       emitter.send(SseEmitter.event().name(event).data(data));
       if (event.equals("delta")) partial.set(true);
     } catch (Exception error) {
@@ -121,6 +134,7 @@ final class ChatStream {
 
   void succeed(String conversation) {
     if (!state.compareAndSet(State.OPEN, State.SUCCEEDED)) return;
+    observe(() -> trace.finish("completed", null));
     stopTimers();
     eventWriteLock.lock();
     try {
@@ -136,6 +150,7 @@ final class ChatStream {
 
   void fail(String code, String message) {
     if (!state.compareAndSet(State.OPEN, State.FAILED)) return;
+    observe(() -> trace.finish("failed", code));
     stopTimers();
     // Claim the terminal state and cancel upstream before waiting for a slow downstream write.
     // Writers check OPEN under the same lock, so any in-flight frame precedes this terminal frame.
@@ -165,6 +180,7 @@ final class ChatStream {
 
   void cancel() {
     if (!state.compareAndSet(State.OPEN, State.CANCELLED)) return;
+    observe(() -> trace.finish("cancelled", "CLIENT_CANCELLED"));
     stopTimers();
     control.cancel();
   }
@@ -172,5 +188,12 @@ final class ChatStream {
   private void stopTimers() {
     if (deadline != null) deadline.cancel(false);
     if (heartbeat != null) heartbeat.interrupt();
+  }
+
+  private void observe(Runnable event) {
+    try { event.run(); }
+    catch (RuntimeException ignored) {
+      // No monitoring error may change the stream state or block upstream cancellation.
+    }
   }
 }
