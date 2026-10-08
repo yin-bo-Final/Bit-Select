@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -25,6 +26,7 @@ import {
   Plus,
   Receipt,
   ShieldCheck,
+  Pulse,
   Truck,
   UsersThree,
   Wallet,
@@ -95,6 +97,9 @@ function Admin() {
           <p>从商品上架到订单完成，让每一笔交易有条不紊。</p>
         </div>
         <div className="overview-refresh">
+          <Link href="/admin/ops">
+            <Button icon={<Pulse size={18} />}>运维工作台</Button>
+          </Link>
           {updatedAt && (
             <span>
               概览更新于{" "}

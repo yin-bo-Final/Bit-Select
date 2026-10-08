@@ -242,7 +242,44 @@ def await_ready(client, processes, seconds):
             time.sleep(0.5)
 
 
-def run_chat(client, model, mode, conversation=None):
+def verify_operations_trace(admin, request_id, mode, output_chars):
+    check(isinstance(request_id, str) and bool(request_id), "SSE metadata omitted operations request ID")
+    expected = "completed" if mode == "normal" else "cancelled" if mode in {"cancel", "cancelrewrite"} else "failed"
+    observed = {}
+
+    def terminal_recorded():
+        try:
+            row = admin.call("GET", "/api/ai/admin/ops/requests/" + request_id)
+        except AssertionError as error:
+            if "got 404" in str(error):
+                return False  # Bounded asynchronous monitoring writes can briefly lag the SSE.
+            raise
+        observed.update(row)
+        return row["status"] != "running"
+
+    wait_until(terminal_recorded, 8, "AI terminal state was not recorded by operations")
+    check(observed["status"] == expected, "Operations classified the AI terminal state incorrectly")
+    check(observed["outputChars"] == output_chars, "Operations output character count differs from streamed text")
+    check(observed["outputCharsFinal"] is True, "Operations character count is not marked final")
+    check(observed["totalMs"] >= 0 and bool(observed["finishedAt"]), "Missing terminal timing")
+    steps = observed["steps"]
+    check(bool(steps) and all(step["status"] != "running" and step["durationMs"] >= 0 for step in steps),
+          "Operations left an executed phase running after the request terminated")
+    if mode == "normal":
+        check({"rewrite", "intent", "retrieve", "compose", "save"}.issubset({step["code"] for step in steps}),
+              "Operations omitted actual completed phases")
+        check(all(step["status"] == "completed" for step in steps), "Successful request has a failed phase")
+        check(observed["firstTokenMs"] is not None and observed["firstTokenMs"] <= observed["totalMs"],
+              "Missing first-token timing")
+    if mode == "timeout":
+        check(observed["errorCode"] == "AI_TIMEOUT", "Timeout classification lost its safe error code")
+    if mode == "cancelrewrite":
+        check(observed["firstTokenMs"] is None and {step["code"] for step in steps} == {"rewrite"},
+              "Cancelled rewriting must not invent later workflow phases")
+    check("prompt" not in observed and "answer" not in observed, "Operations response exposed raw model inputs")
+
+
+def run_chat(client, model, mode, conversation=None, operations_admin=None):
     marker, record = model.scenario(mode)
     body = {"message": "你好。" + marker}
     if conversation:
@@ -275,6 +312,7 @@ def run_chat(client, model, mode, conversation=None):
     metadata = [value for kind, value, _ in events if kind == "meta"]
     check(len(metadata) == 1, "Expected exactly one conversation metadata event")
     cid = metadata[0]["conversationId"]
+    request_id = metadata[0].get("requestId")
     check(not conversation or cid == conversation, "Conversation changed during retry")
     if mode in {"cancel", "cancelrewrite"}:
         wait_until(lambda: "upstreamDisconnectedAt" in record, 6,
@@ -316,6 +354,10 @@ def run_chat(client, model, mode, conversation=None):
     else:
         check(messages == [], "Failed or cancelled answer was saved as a completed conversation")
     result = {"mode": mode, "seconds": round(elapsed, 3), "events": [kind for kind, _, _ in events]}
+    if operations_admin:
+        verify_operations_trace(operations_admin, request_id, mode,
+                                sum(len(value["content"]) for kind, value, _ in events if kind == "delta"))
+        result["operationsTrace"] = "verified"
     if "firstDeltaReceivedAt" in record:
         result["firstDeltaSeconds"] = round(record["firstDeltaReceivedAt"] - started, 3)
     if "clientAbortedAt" in record:
@@ -452,13 +494,18 @@ def main():
         client.call("POST", "/api/auth/register", {"username": "sse_qa_" + nonce,
                     "password": "LocalSse-" + uuid.uuid4().hex, "nickname": "本地流式验证"})
         client.call("PUT", "/api/ai/memory-preference", {"enabled": False})
+        operations_admin = Client(base)
+        operations_admin.call("POST", "/api/auth/login", {
+            "username": env.get("ADMIN_USERNAME", "admin"), "password": env["ADMIN_PASSWORD"]})
+        client.call("GET", "/api/ai/admin/ops/summary", status=403)
+        Client(base).call("GET", "/api/ai/admin/ops/requests", status=401)
         for mode in ("normal", "cut", "length", "timeout", "cancel", "cancelrewrite"):
-            cid, result = run_chat(client, model, mode)
+            cid, result = run_chat(client, model, mode, operations_admin=operations_admin)
             results.append(result)
             if mode != "normal":
                 # One deliberate retry after observing completion/cancellation proves
                 # that the conversation lock and permit have been released.
-                _, retry = run_chat(client, model, "normal", cid)
+                _, retry = run_chat(client, model, "normal", cid, operations_admin=operations_admin)
                 retry["retryAfter"] = mode
                 results.append(retry)
         check(not model.unexpected_paths, "Unexpected model/embedding/rerank call; test scope changed")

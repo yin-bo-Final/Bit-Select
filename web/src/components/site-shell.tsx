@@ -93,6 +93,11 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
                             label: "管理后台",
                             onClick: () => router.push("/admin"),
                           },
+                          {
+                            key: "operations",
+                            label: "运维工作台",
+                            onClick: () => router.push("/admin/ops"),
+                          },
                         ]
                       : []),
                     {
@@ -140,6 +145,15 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
                     label: "我的钱包",
                     onClick: () => router.push("/account"),
                   },
+                  ...(user?.role === "ADMIN"
+                    ? [
+                        {
+                          key: "/admin/ops",
+                          label: "运维工作台",
+                          onClick: () => router.push("/admin/ops"),
+                        },
+                      ]
+                    : []),
                 ],
               }}
             >
