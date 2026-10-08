@@ -10,6 +10,7 @@ import {
   Empty,
   Input,
   Popconfirm,
+  Skeleton,
   Spin,
   Switch,
   Tag,
@@ -20,6 +21,11 @@ import {
   ChatCircleDots,
   Check,
   ClockCounterClockwise,
+  BookOpenText,
+  CookingPot,
+  Desktop,
+  Headphones,
+  House,
   Plus,
   Stop,
   Trash,
@@ -46,6 +52,7 @@ export default function AssistantPage() {
 }
 function Assistant() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationsLoading, setConversationsLoading] = useState(true);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -71,6 +78,8 @@ function Assistant() {
       setConversations(result.items);
     } catch (e) {
       setError(errorText(e));
+    } finally {
+      setConversationsLoading(false);
     }
   }, []);
   useEffect(() => {
@@ -84,7 +93,7 @@ function Assistant() {
     end.current?.scrollIntoView({ behavior: "instant", block: "end" });
   }, [messages]);
   const loadConversation = async (id: string) => {
-    if (busy) return;
+    if (busy || historyLoading) return;
     setHistoryLoading(true);
     setError("");
     setHistoryOpen(false);
@@ -104,7 +113,7 @@ function Assistant() {
     }
   };
   const newConversation = () => {
-    if (busy) return;
+    if (busy || historyLoading) return;
     setMessages([]);
     setConversationId(null);
     setStats(null);
@@ -237,24 +246,40 @@ function Assistant() {
   };
   const history = (
     <>
+      <div className="workspace-sidebar-title">
+        <ChatCircleDots size={22} weight="duotone" />
+        <span>导购工作区</span>
+      </div>
       <Button
+        className="new-conversation-button"
         block
+        type="primary"
         icon={<Plus size={18} />}
         onClick={newConversation}
-        disabled={busy}
+        disabled={busy || historyLoading}
       >
         开启新对话
       </Button>
-      <h2>最近对话</h2>
+      <div className="history-section-heading">
+        <h2>最近对话</h2>
+        {!conversationsLoading && <span>{conversations.length}</span>}
+      </div>
       <div className="conversation-list">
-        {!conversations.length ? (
-          <p className="muted">你的选购故事会保存在这里。</p>
+        {conversationsLoading ? (
+          <Skeleton active title={false} paragraph={{ rows: 4 }} />
+        ) : !conversations.length ? (
+          <div className="conversation-empty">
+            <ClockCounterClockwise size={26} />
+            <p>从一个问题开始</p>
+            <span>已保存的对话会出现在这里，随时接着聊。</span>
+          </div>
         ) : (
           conversations.map((item) => (
             <button
               key={item.id}
-              disabled={busy}
+              disabled={busy || historyLoading}
               className={conversationId === item.id ? "active" : ""}
+              aria-current={conversationId === item.id ? "true" : undefined}
               onClick={() => loadConversation(item.id)}
             >
               <ChatCircleDots size={18} />
@@ -276,7 +301,7 @@ function Assistant() {
     </>
   );
   return (
-    <div className="assistant-layout">
+    <div className="assistant-layout precision-assistant">
       <aside className="conversation-sidebar">{history}</aside>
       <section className="chat-workspace">
         <header className="chat-header">
@@ -286,7 +311,7 @@ function Assistant() {
             </span>
             <div>
               <h1>比特导购</h1>
-              <p>选购建议，有据可依。</p>
+              <p>{busy ? phase : "把预算、场景与商品资料放在一起考虑。"}</p>
             </div>
           </div>
           <div className="chat-header-actions">
@@ -314,35 +339,70 @@ function Assistant() {
         >
           {historyLoading ? (
             <div className="chat-loading">
-              <Spin />
+              <Skeleton active paragraph={{ rows: 4 }} />
               <p>正在找回对话</p>
             </div>
           ) : !messages.length ? (
             <div className="chat-welcome">
-              <span className="welcome-mark">
-                <ChatCircleDots size={44} weight="duotone" />
-              </span>
-              <h2>今天，想选点什么？</h2>
-              <p>
-                说说你的预算、使用场景，
+              <div className="welcome-intro">
+                <span className="welcome-mark">
+                  <ChatCircleDots size={36} weight="duotone" />
+                </span>
+                <span className="welcome-label">你的专属选购空间</span>
+              </div>
+              <h2>
+                想选得明白，
                 <br />
-                或者直接问一件商品。
+                我们一起看看。
+              </h2>
+              <p>
+                从预算、使用习惯或一件心仪商品开始。
+                我会查阅资料，帮你找到适合自己的选择。
               </p>
               <div className="suggestion-grid">
                 {[
-                  "预算 300 元，帮我挑一副通勤耳机",
-                  "想让出租屋更舒适，有哪些实用好物？",
-                  "每天久坐办公，怎么搭配桌面装备？",
-                  "帮我选适合一个人做饭的厨具",
-                ].map((question) => (
-                  <button key={question} onClick={() => void send(question)}>
-                    {question}
+                  {
+                    title: "通勤耳机",
+                    detail: "预算 300 元，听听怎么选",
+                    question: "预算 300 元，帮我挑一副通勤耳机",
+                    icon: <Headphones size={23} />,
+                  },
+                  {
+                    title: "舒适生活",
+                    detail: "让出租屋多一点舒服",
+                    question: "想让出租屋更舒适，有哪些实用好物？",
+                    icon: <House size={23} />,
+                  },
+                  {
+                    title: "办公桌面",
+                    detail: "久坐办公，也能得心应手",
+                    question: "每天久坐办公，怎么搭配桌面装备？",
+                    icon: <Desktop size={23} />,
+                  },
+                  {
+                    title: "一人食厨房",
+                    detail: "简单做饭，轻松收拾",
+                    question: "帮我选适合一个人做饭的厨具",
+                    icon: <CookingPot size={23} />,
+                  },
+                ].map(({ title, detail, question, icon }) => (
+                  <button
+                    key={title}
+                    onClick={() => void send(question)}
+                    disabled={busy || historyLoading}
+                  >
+                    <span className="suggestion-icon">{icon}</span>
+                    <span className="suggestion-copy">
+                      <strong>{title}</strong>
+                      <small>{detail}</small>
+                    </span>
                     <ArrowRight size={18} />
                   </button>
                 ))}
               </div>
               <p className="assistant-intro">
-                我会参考商品说明书与实际在售商品，帮你比较功能、价格和适用场景。
+                <BookOpenText size={17} />
+                参考说明书与实际在售商品，答案附可查看的资料。
               </p>
             </div>
           ) : (
@@ -398,7 +458,15 @@ function Assistant() {
               items={[
                 {
                   key: "context",
-                  label: "会话状态",
+                  label: (
+                    <span className="context-summary-label">
+                      <ClockCounterClockwise size={15} />
+                      {stats.summaryPresent
+                        ? "较早对话已整理为摘要"
+                        : "当前对话保留完整上下文"}
+                      <span>查看会话状态</span>
+                    </span>
+                  ),
                   children: (
                     <div>
                       <p>
@@ -439,7 +507,11 @@ function Assistant() {
               void send();
             }}
           >
+            <label className="composer-label" htmlFor="bit-assistant-input">
+              说说你想找什么
+            </label>
             <Input.TextArea
+              id="bit-assistant-input"
               ref={inputRef}
               aria-label="发送给导购的问题"
               value={input}
@@ -476,11 +548,15 @@ function Assistant() {
             )}
           </form>
           <p className="composer-note">
-            AI 建议仅供选购参考，价格和库存以商品页面为准。Shift + Enter 换行。
+            <span>AI 建议供选购参考，价格与库存以商品页为准。</span>
+            <span className="composer-shortcut">
+              <kbd>Shift</kbd> + <kbd>Enter</kbd> 换行
+            </span>
           </p>
         </div>
       </section>
       <Drawer
+        rootClassName="precision-drawer precision-history-drawer"
         title="对话记录"
         placement="left"
         open={historyOpen}
@@ -489,11 +565,16 @@ function Assistant() {
         {history}
       </Drawer>
       <Drawer
+        rootClassName="precision-drawer precision-memory-drawer"
         title="关于你的记忆"
         open={memoryOpen}
         onClose={() => setMemoryOpen(false)}
         size={460}
       >
+        <div className="memory-drawer-intro">
+          <Brain size={28} weight="duotone" />
+          <h2>越了解，越合适。</h2>
+        </div>
         <p className="memory-description">
           导购会记住你提到的偏好和使用习惯，只用于你自己的推荐。新记忆需要一点时间整理；有冲突时优先参考你最近的表述。
         </p>
@@ -517,13 +598,16 @@ function Assistant() {
             action={<Button onClick={loadMemories}>重试</Button>}
           />
         )}
-        <Button
-          icon={<ClockCounterClockwise size={18} />}
-          onClick={loadMemories}
-          loading={memoryLoading}
-        >
-          刷新记忆
-        </Button>
+        <div className="memory-list-heading">
+          <h3>已保存的偏好</h3>
+          <Button
+            icon={<ClockCounterClockwise size={18} />}
+            onClick={loadMemories}
+            loading={memoryLoading}
+          >
+            刷新记忆
+          </Button>
+        </div>
         {memoryLoading ? (
           <div className="chat-loading">
             <Spin />
@@ -577,8 +661,9 @@ function Sources({ sources }: { sources: Source[] }) {
             key: "sources",
             label: (
               <span className="source-label">
-                <Check size={15} />
-                参考了 {sources.length} 条商品资料
+                <BookOpenText size={16} />
+                参考商品资料{" "}
+                <span className="source-count">{sources.length}</span>
               </span>
             ),
             children: (
@@ -588,7 +673,10 @@ function Sources({ sources }: { sources: Source[] }) {
                     key={`${source.productId}-${index}`}
                     className="source-item"
                   >
-                    <strong>{source.title}</strong>
+                    <div className="source-item-heading">
+                      <FileSourceIcon />
+                      <strong>{source.title}</strong>
+                    </div>
                     <p>{source.excerpt}</p>
                     <details className="source-full">
                       <summary>展开完整摘录</summary>
@@ -609,5 +697,13 @@ function Sources({ sources }: { sources: Source[] }) {
         ]}
       />
     </div>
+  );
+}
+
+function FileSourceIcon() {
+  return (
+    <span className="source-document-icon">
+      <Check size={15} />
+    </span>
   );
 }

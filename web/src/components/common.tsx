@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useSession } from "./providers";
 import { money } from "@/lib/api";
 import type { Product } from "@/lib/types";
+import { ArrowUpRight, ShoppingBag } from "@phosphor-icons/react";
 
 export function ErrorState({
   error,
@@ -38,7 +39,11 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
   if (!user)
     return (
       <div className="login-gate">
-        <Empty description="登录后即可继续" />
+        <div className="gate-symbol">
+          <ShoppingBag size={36} weight="light" />
+        </div>
+        <h1>登录后即可继续</h1>
+        <p>你的购物袋、订单与专属导购，都在这里。</p>
         <Link href="/login">
           <Button type="primary">登录 / 注册</Button>
         </Link>
@@ -98,7 +103,10 @@ export function ProductCard({
           <p className="product-description">{product.description}</p>
           <div className="product-bottom">
             <strong>{money(product.priceCents)}</strong>
-            <span>{product.stock > 0 ? "查看好物" : "暂时售罄"}</span>
+            <span>
+              {product.stock > 0 ? "查看好物" : "暂时售罄"}
+              <ArrowUpRight size={17} />
+            </span>
           </div>
         </div>
       </Link>

@@ -12,7 +12,13 @@ import {
   Switch,
   Tag,
 } from "antd";
-import { Plus } from "@phosphor-icons/react";
+import {
+  Plus,
+  MapPin,
+  PencilSimple,
+  Trash,
+  House,
+} from "@phosphor-icons/react";
 import { api, post, errorText } from "@/lib/api";
 import type { SavedAddress } from "@/lib/types";
 
@@ -70,9 +76,15 @@ export function AddressBook() {
     }
   };
   return (
-    <section className="address-section">
+    <section className="address-section commerce-section commerce-addresses">
       <div className="heading-with-action">
-        <h2>收货地址</h2>
+        <div className="commerce-section-title">
+          <MapPin size={23} />
+          <div>
+            <h2>收货地址</h2>
+            <p>保存常用地址，下次下单更从容。</p>
+          </div>
+        </div>
         <Button
           icon={<Plus size={17} />}
           onClick={() => open("new")}
@@ -90,18 +102,32 @@ export function AddressBook() {
       )}
       <div className="address-grid">
         {!addresses.length ? (
-          <Empty description="添加常用地址，让下次购买更方便" />
+          <Empty
+            image={<House size={48} weight="thin" />}
+            description="添加常用地址，让下次购买更方便"
+          />
         ) : (
           addresses.map((address) => (
-            <article className="address-card" key={address.id}>
+            <article
+              className={`address-card ${address.isDefault ? "commerce-address-default" : ""}`}
+              key={address.id}
+            >
               <div>
+                <span className="commerce-address-marker">
+                  <House size={19} />
+                </span>
                 <strong>{address.recipient}</strong>
                 <span>{address.phone}</span>
                 {address.isDefault && <Tag>默认地址</Tag>}
               </div>
               <p>{address.detail}</p>
               <footer>
-                <Button type="text" size="small" onClick={() => open(address)}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<PencilSimple size={16} />}
+                  onClick={() => open(address)}
+                >
                   编辑
                 </Button>
                 <Popconfirm
@@ -110,7 +136,7 @@ export function AddressBook() {
                   cancelText="保留"
                   onConfirm={() => remove(address.id)}
                 >
-                  <Button type="text" size="small">
+                  <Button type="text" size="small" icon={<Trash size={16} />}>
                     删除
                   </Button>
                 </Popconfirm>
@@ -120,6 +146,7 @@ export function AddressBook() {
         )}
       </div>
       <Modal
+        className="commerce-modal"
         title={editing === "new" ? "添加地址" : "编辑地址"}
         open={!!editing}
         onCancel={() => {

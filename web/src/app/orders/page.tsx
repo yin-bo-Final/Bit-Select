@@ -2,7 +2,15 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Alert, App, Button, Empty, Pagination, Tag } from "antd";
-import { Package, Truck, ArrowClockwise } from "@phosphor-icons/react";
+import {
+  Package,
+  Truck,
+  ArrowClockwise,
+  MapPin,
+  Check,
+  CreditCard,
+  CheckCircle,
+} from "@phosphor-icons/react";
 import { api, post, money, date, errorText } from "@/lib/api";
 import type { Order, PageResult } from "@/lib/types";
 import { orderActions, orderLabels } from "@/lib/orders";
@@ -14,6 +22,51 @@ import {
 } from "@/components/common";
 import { useSession } from "@/components/providers";
 import { RefundRequestButton, Refunds } from "@/components/refunds";
+
+function OrderProgress({ status }: { status: string }) {
+  const position: Record<string, number> = {
+    PENDING_PAYMENT: 0,
+    PAID: 1,
+    SHIPPED: 2,
+    COMPLETED: 4,
+  };
+  const current = position[status];
+  if (current === undefined) return null;
+  const steps = [
+    { label: "余额支付", Icon: CreditCard },
+    { label: "商品出库", Icon: Package },
+    { label: "配送途中", Icon: Truck },
+    { label: "确认收货", Icon: CheckCircle },
+  ];
+  return (
+    <ol
+      className="commerce-order-progress"
+      aria-label={`订单进度：${orderLabels[status]}`}
+    >
+      {steps.map(({ label, Icon }, index) => (
+        <li
+          key={label}
+          className={
+            index < current
+              ? "is-complete"
+              : index === current
+                ? "is-current"
+                : ""
+          }
+        >
+          <span>
+            {index < current ? (
+              <Check size={15} weight="bold" />
+            ) : (
+              <Icon size={17} />
+            )}
+          </span>
+          <span>{label}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 export default function OrdersPage() {
   return (
@@ -71,10 +124,15 @@ function Orders() {
       },
     });
   return (
-    <div className="orders-page">
+    <div className="orders-page commerce-page">
       <div className="page-heading heading-with-action">
         <div>
-          <h1>我的订单</h1>
+          <h1>
+            我的订单
+            {!loading && (
+              <span className="commerce-heading-count">{data.total}</span>
+            )}
+          </h1>
           <p>每一件期待，都有迹可循。</p>
         </div>
         <Button icon={<ArrowClockwise size={18} />} onClick={load}>
@@ -98,9 +156,17 @@ function Orders() {
         <>
           <div className="order-list">
             {data.items.map((order) => (
-              <article className="order-card" key={order.id}>
+              <article
+                className={`order-card commerce-order-${order.status.toLowerCase()}`}
+                key={order.id}
+              >
                 <div className="order-header">
-                  <span>订单 {order.orderNo}</span>
+                  <span className="commerce-order-number">
+                    <Package size={17} />
+                    <span>
+                      订单 <b>{order.orderNo}</b>
+                    </span>
+                  </span>
                   <time>{date(order.createdAt)}</time>
                   <Tag
                     color={
@@ -112,6 +178,7 @@ function Orders() {
                     {orderLabels[order.status] || order.status}
                   </Tag>
                 </div>
+                <OrderProgress status={order.status} />
                 <div className="order-items">
                   {order.items.map((item) => (
                     <div className="order-item" key={item.productId}>
@@ -139,8 +206,16 @@ function Orders() {
                   ))}
                 </div>
                 <div className="order-address">
-                  {order.address.recipient} / {order.address.phone} /{" "}
-                  {order.address.detail}
+                  <MapPin size={18} />
+                  <div>
+                    <span>
+                      <strong>{order.address.recipient}</strong>
+                      <span className="commerce-mono">
+                        {order.address.phone}
+                      </span>
+                    </span>
+                    <p>{order.address.detail}</p>
+                  </div>
                 </div>
                 {order.status === "PENDING_PAYMENT" && (
                   <Alert
@@ -156,11 +231,19 @@ function Orders() {
                   </div>
                 )}
                 <div className="order-footer">
-                  <span>
-                    共{" "}
-                    {order.items.reduce((sum, item) => sum + item.quantity, 0)}{" "}
-                    件商品 <strong>合计 {money(order.totalCents)}</strong>
-                  </span>
+                  <div className="commerce-order-total">
+                    <span>
+                      共{" "}
+                      {order.items.reduce(
+                        (sum, item) => sum + item.quantity,
+                        0,
+                      )}{" "}
+                      件商品
+                    </span>{" "}
+                    <strong>
+                      <small>合计</small> {money(order.totalCents)}
+                    </strong>
+                  </div>
                   <div className="order-actions">
                     {["SHIPPED", "COMPLETED"].includes(order.status) && (
                       <RefundRequestButton

@@ -418,7 +418,7 @@ def main():
 本说明书不宣称现实世界的生产、质保或商业承诺。
 '''
             (manuals/f'{sku}.md').write_text(text,encoding='utf-8')
-            html='<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escape(title)+'</title><style>body{max-width:760px;margin:48px auto;padding:0 24px;color:#253142;font:16px/1.9 system-ui}pre{white-space:pre-wrap;font:inherit}a{color:#2953ad}</style><a href="/products/'+str(ident)+'">返回商品</a><pre>'+escape(text)+'</pre></html>'
+            html='<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+escape(title)+'</title><link rel="stylesheet" href="/manuals/manual.css"><script src="/manuals/manual.js"></script><a href="/products/'+str(ident)+'">返回商品</a><pre>'+escape(text)+'</pre></html>'
             (public_manuals/f'{sku}.html').write_text(html,encoding='utf-8')
             svg=f'<svg xmlns="http://www.w3.org/2000/svg" width="512" height="400" viewBox="0 0 512 400"><title>{escape(title)}：原创商品概念图</title><rect width="512" height="400" fill="#edf0f2"/><ellipse cx="256" cy="328" rx="129" ry="12" fill="#d8dee3"/>{shape(category,COLORS[variant],name,variant)}<text x="256" y="373" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#77828c">{sku} · CONCEPT ILLUSTRATION</text></svg>'
             (assets/f'{sku}.svg').write_text(svg,encoding='utf-8')

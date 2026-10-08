@@ -9,6 +9,7 @@ import {
   InputNumber,
   Modal,
   Select,
+  Skeleton,
   Space,
   Statistic,
   Switch,
@@ -17,11 +18,21 @@ import {
   Tag,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { ArrowClockwise, Plus } from "@phosphor-icons/react";
+import {
+  ArrowClockwise,
+  BookOpenText,
+  Package,
+  Plus,
+  Receipt,
+  ShieldCheck,
+  Truck,
+  UsersThree,
+  Wallet,
+} from "@phosphor-icons/react";
 import { api, post, date, money, errorText } from "@/lib/api";
 import type { Order, PageResult, Product, User } from "@/lib/types";
 import { orderLabels } from "@/lib/orders";
-import { ErrorState, LoginGate } from "@/components/common";
+import { ErrorState, LoginGate, ProductImage } from "@/components/common";
 import { useSession } from "@/components/providers";
 import { Refunds } from "@/components/refunds";
 import { KnowledgeAdmin } from "@/components/knowledge-admin";
@@ -43,13 +54,19 @@ function Admin() {
     pendingOrderCount: number;
   } | null>(null);
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const load = useCallback(async () => {
     if (user?.role !== "ADMIN") return;
+    setRefreshing(true);
     try {
       setOverview(await api("/admin/overview"));
+      setUpdatedAt(new Date());
       setError("");
     } catch (e) {
       setError(errorText(e));
+    } finally {
+      setRefreshing(false);
     }
   }, [user?.role]);
   useEffect(() => {
@@ -67,44 +84,139 @@ function Admin() {
       </div>
     );
   return (
-    <div className="admin-page">
-      <div className="page-heading heading-with-action">
+    <div className="admin-page precision-admin">
+      <div className="workspace-page-heading">
         <div>
+          <span className="workspace-section-label">
+            <ShieldCheck size={17} />
+            运营工作台
+          </span>
           <h1>商城管理</h1>
-          <p>管理商品、订单和平台余额。</p>
+          <p>从商品上架到订单完成，让每一笔交易有条不紊。</p>
         </div>
-        <Button icon={<ArrowClockwise size={18} />} onClick={load}>
-          刷新概览
-        </Button>
+        <div className="overview-refresh">
+          {updatedAt && (
+            <span>
+              概览更新于{" "}
+              {updatedAt.toLocaleTimeString("zh-CN", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          )}
+          <Button
+            icon={<ArrowClockwise size={18} />}
+            onClick={load}
+            loading={refreshing}
+          >
+            刷新概览
+          </Button>
+        </div>
       </div>
       {error && <ErrorState error={error} retry={load} />}
-      <section className="admin-stats">
-        <Statistic title="平台用户" value={overview?.userCount ?? 0} />
-        <Statistic title="在库商品" value={overview?.productCount ?? 0} />
-        <Statistic title="全部订单" value={overview?.orderCount ?? 0} />
-        <Statistic
-          title="待处理订单"
-          value={overview?.pendingOrderCount ?? 0}
-        />
-        <Statistic
-          title="已支付金额"
-          value={money(overview?.paidRevenueCents)}
-        />
-      </section>
-      <Tabs
-        defaultActiveKey="users"
-        items={[
-          { key: "users", label: "用户与余额", children: <Users /> },
-          { key: "products", label: "商品与库存", children: <Products /> },
-          { key: "orders", label: "订单与发货", children: <AdminOrders /> },
-          { key: "refunds", label: "售后审核", children: <Refunds admin /> },
+      <section
+        className="admin-stats"
+        aria-label="商城概览"
+        aria-busy={refreshing}
+      >
+        {[
           {
-            key: "knowledge",
-            label: "导购知识库",
-            children: <KnowledgeAdmin />,
+            title: "平台用户",
+            value: overview?.userCount,
+            icon: <UsersThree size={20} />,
           },
-        ]}
-      />
+          {
+            title: "在库商品",
+            value: overview?.productCount,
+            icon: <Package size={20} />,
+          },
+          {
+            title: "全部订单",
+            value: overview?.orderCount,
+            icon: <Receipt size={20} />,
+          },
+          {
+            title: "待处理订单",
+            value: overview?.pendingOrderCount,
+            icon: <Truck size={20} />,
+          },
+          {
+            title: "已支付金额",
+            value: overview ? money(overview.paidRevenueCents) : undefined,
+            icon: <Wallet size={20} />,
+          },
+        ].map(({ title, value, icon }) => (
+          <div className="admin-stat-item" key={title}>
+            <div className="admin-stat-label">
+              {title}
+              {icon}
+            </div>
+            {value === undefined ? (
+              <Skeleton.Input active size="small" />
+            ) : (
+              <Statistic value={value} />
+            )}
+          </div>
+        ))}
+      </section>
+      <div className="admin-workbench">
+        <Tabs
+          className="admin-workspace-tabs"
+          defaultActiveKey="users"
+          items={[
+            {
+              key: "users",
+              label: (
+                <span>
+                  <UsersThree size={18} />
+                  用户与余额
+                </span>
+              ),
+              children: <Users />,
+            },
+            {
+              key: "products",
+              label: (
+                <span>
+                  <Package size={18} />
+                  商品与库存
+                </span>
+              ),
+              children: <Products />,
+            },
+            {
+              key: "orders",
+              label: (
+                <span>
+                  <Truck size={18} />
+                  订单与发货
+                </span>
+              ),
+              children: <AdminOrders />,
+            },
+            {
+              key: "refunds",
+              label: (
+                <span>
+                  <Receipt size={18} />
+                  售后审核
+                </span>
+              ),
+              children: <Refunds admin />,
+            },
+            {
+              key: "knowledge",
+              label: (
+                <span>
+                  <BookOpenText size={18} />
+                  导购知识库
+                </span>
+              ),
+              children: <KnowledgeAdmin />,
+            },
+          ]}
+        />
+      </div>
     </div>
   );
 }
@@ -223,6 +335,10 @@ function Users() {
   ];
   return (
     <>
+      <div className="workspace-section-heading">
+        <h2>用户与余额</h2>
+        <p>查看用户账户，为演示购物分配平台余额。</p>
+      </div>
       <div className="admin-toolbar">
         <Input.Search
           placeholder="搜索用户名或昵称"
@@ -233,7 +349,13 @@ function Users() {
             list.setPage(1);
           }}
         />
-        <Button onClick={list.load}>刷新</Button>
+        <Button
+          icon={<ArrowClockwise size={17} />}
+          onClick={list.load}
+          loading={list.loading}
+        >
+          刷新
+        </Button>
       </div>
       {list.error && <ErrorState error={list.error} retry={list.load} />}
       <Table<User>
@@ -245,6 +367,7 @@ function Users() {
         scroll={{ x: 760 }}
       />
       <Modal
+        rootClassName="precision-admin-modal"
         title={`为 ${target?.nickname || target?.username || "用户"} 分配余额`}
         open={!!target}
         onCancel={() => {
@@ -412,7 +535,22 @@ function Products() {
     }
   };
   const columns: ColumnsType<Product> = [
-    { title: "商品", dataIndex: "name", width: 260 },
+    {
+      title: "商品",
+      dataIndex: "name",
+      width: 300,
+      render: (_, item) => (
+        <div className="admin-product-cell">
+          <span className="admin-product-thumbnail">
+            <ProductImage product={item} />
+          </span>
+          <span>
+            <strong>{item.name}</strong>
+            <small>商品 ID {item.id}</small>
+          </span>
+        </div>
+      ),
+    },
     { title: "分类", dataIndex: "categoryName" },
     { title: "价格", dataIndex: "priceCents", render: money, align: "right" },
     { title: "库存", dataIndex: "stock", align: "right" },
@@ -449,6 +587,10 @@ function Products() {
   ];
   return (
     <>
+      <div className="workspace-section-heading">
+        <h2>商品与库存</h2>
+        <p>维护在售商品和规格，记录每一次库存变更。</p>
+      </div>
       <div className="admin-toolbar">
         <Input.Search
           placeholder="搜索商品"
@@ -477,6 +619,7 @@ function Products() {
         scroll={{ x: 950 }}
       />
       <Modal
+        rootClassName="precision-admin-modal"
         open={!!editing}
         title={editing === "new" ? "新建商品" : "编辑商品"}
         onCancel={() => {
@@ -614,6 +757,7 @@ function Products() {
         </Form>
       </Modal>
       <Modal
+        rootClassName="precision-admin-modal"
         open={!!inventory}
         title={`调整库存：${inventory?.name || ""}`}
         onCancel={() => {
@@ -727,11 +871,21 @@ function AdminOrders() {
   ];
   return (
     <>
+      <div className="workspace-section-heading">
+        <h2>订单与发货</h2>
+        <p>查看订单明细与收货信息，处理已付款的订单。</p>
+      </div>
       <div className="admin-toolbar">
         <p className="muted">
           仅已付款的订单可以发货。此演示使用模拟物流单号。
         </p>
-        <Button onClick={list.load}>刷新订单</Button>
+        <Button
+          icon={<ArrowClockwise size={17} />}
+          onClick={list.load}
+          loading={list.loading}
+        >
+          刷新订单
+        </Button>
       </div>
       {list.error && <ErrorState error={list.error} retry={list.load} />}
       <Table<Order>
@@ -751,6 +905,7 @@ function AdminOrders() {
         }}
       />
       <Modal
+        rootClassName="precision-admin-modal"
         title="模拟发货"
         open={!!target}
         onCancel={() => {
