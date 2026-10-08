@@ -67,21 +67,35 @@ SILICONFLOW_RERANK_MODEL=Qwen/Qwen3-Reranker-4B
 AI_CONTEXT_TOKENS=262144
 ```
 
-在启动应用的 PowerShell 中执行 `. ./scripts/Use-LocalEnvironment.ps1`，只给当前进程加载配置。若从 IDEA 启动，将这些变量配置到运行环境，工作目录设置为仓库根目录；不把密钥写入共享的 IDEA 配置。没有提供有效 API Key 时，涉及模型的接口应明确报告未配置。
+在启动应用的 PowerShell 中执行 `. ./scripts/Use-LocalEnvironment.ps1`，只给当前进程加载配置。IDEA 使用下面的脚本生成启动项，直接读取本地环境文件；无需复制凭证到运行配置。没有提供有效 API Key 时，涉及模型的接口应明确报告未配置。
 
 对话模型按 256K 容量配置为 262,144 token；Embedding 实际为 2,560 维。上下文在 60% 时触发较早历史摘要，最近约 20% 按完整轮次保留。正文使用真实 Qwen tokenizer，消息封装估计、回答输出和安全余量单独预留，本地估计不等同于供应商最终 usage。具体规则和模型切换影响见 [AI 实现](docs/AI实现与验收.md)。
 
 ## 启动应用
 
-先启动中间件，再构建业务代码。在 IDEA 打开**仓库根目录**，导入 `backend/pom.xml` 为 Maven 项目，设置项目 SDK 与 Maven JDK 均为 Java 21。执行以下脚本生成不含密钥的本地运行配置：
+先启动中间件，再构建业务代码。在 IDEA 2025.3 或更新版本打开**仓库根目录**，导入 `backend/pom.xml` 为 Maven 项目，设置项目 SDK 与 Maven JDK 均为 Java 21。首次安装前端依赖执行 `npm --prefix web ci`。执行以下脚本生成或更新本地运行配置：
 
 ```powershell
 pwsh ./scripts/New-IdeaRunConfigurations.ps1
 ```
 
-四个运行入口为 `CatalogApplication`、`CommerceApplication`、`AiApplication` 和 `GatewayApplication`。将 `infra/.env` 与根目录 `.env.local` 的变量填入各自的**本地**运行环境，或让全新打开的 IDEA 进程继承已加载这些变量的终端环境；已经运行的 IDEA 不会自动获得另一个终端的新环境变量。生成的 `.idea` 文件被 Git 忽略，不会包含 API Key。
+脚本识别本机 JDK 21 与 Node.js，生成以下七个运行项。可用 `-JavaHome` 和 `-NodeInterpreter` 显式指定安装路径。它只刷新自己管理的配置，其他运行项保留。
 
-IDEA 配置中的 `$PROJECT_DIR$` 必须指向仓库根目录，以便找到 `data/products.json` 和 `data/ranking/model.json`。如果已有项目将 `backend` 作为根目录，请把工作目录以及 `CATALOG_SEED_PATH`、`AI_RANKING_MODEL` 改为正确的绝对路径。先启动 Catalog、Commerce，等待数据库迁移与服务注册完成，再启动 AI 和 Gateway。前端单独执行 `npm --prefix web ci`、`npm --prefix web run dev`。
+| IDEA 运行项 | 用途 | HTTP 端口 |
+| --- | --- | --- |
+| `Bit Select - catalog-service` | 商品与知识文档目录 | 8082 |
+| `Bit Select - commerce-service` | 用户、钱包、订单、售后 | 8081 |
+| `Bit Select - ai-service` | AI 导购、检索和记忆 | 8083 |
+| `Bit Select - gateway` | API 网关 | 8080 |
+| `Bit Select - web` | Next.js 开发服务 | 3000 |
+| `Bit Select - 全部后端` | 并行启动四个 Java 服务 | — |
+| `Bit Select - 全部应用` | 并行启动后端与前端 | — |
+
+后端运行项通过 IDEA **原生环境文件支持**依次读取 `infra/.env`、根目录 `.env.local`（存在时），后者同名变量优先；不需要安装 `.env` 插件。启动时读取文件，修改已有文件的密码或模型密钥后只需重新运行相应服务。若之后才新建 `.env.local`，重新运行生成脚本添加引用。配置只保存文件路径，不保存密码或 API Key，整个 `.idea/` 被 Git 忽略。前端运行项仅设置网关地址，执行 `npm run dev -- --port 3000` 固定端口，Next.js 自行读取 `web/.env.local`，不会加载后端模型密钥。
+
+在 IDEA 停止原来的服务和前端进程，再从右上角选择 `Bit Select - 全部应用`，点击运行或调试。若运行列表尚未刷新，使用“文件 → 从磁盘重新加载所有文件”（或重新打开项目）。选择名称以 `Bit Select -` 开头的配置；IDEA 自动创建的 `AiApplication` 等临时配置不会自动继承这些环境文件设置。单独启动时，按 Catalog、Commerce、AI、Gateway、Web 的顺序运行；组合启动并行运行，等待所有服务就绪后访问商城。
+
+IDEA 配置中的 `$PROJECT_DIR$` 必须指向仓库根目录，以便找到 `data/products.json` 和 `data/ranking/model.json`。如果已有项目将 `backend` 作为根目录，请重新在 IDEA 打开仓库根目录。业务应用由 IDEA 运行，中间件继续运行在 WSL Docker。
 
 也可直接通过 Windows 后台进程运行同一套 Java 21 应用：
 
