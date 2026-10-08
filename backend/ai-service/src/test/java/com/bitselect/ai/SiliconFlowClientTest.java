@@ -79,6 +79,24 @@ class SiliconFlowClientTest {
   }
 
   @Test
+  void finishReasonWithoutDoneDoesNotHideTransportTruncation() {
+    handler(token() + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n", false);
+    assertThrows(IllegalStateException.class, () -> client(5).stream(messages(), s -> {}));
+  }
+
+  @Test
+  void outputLimitIsNotACompleteAnswerEvenWithDone() {
+    handler(
+        token()
+            + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n"
+            + "data: [DONE]\n\n",
+        false);
+    var error =
+        assertThrows(IllegalStateException.class, () -> client(5).stream(messages(), s -> {}));
+    assertEquals("MODEL_RESPONSE_LIMIT", error.getMessage());
+  }
+
+  @Test
   void stalledStreamClosesAndReleasesThreadAtDeadline() throws Exception {
     handler(token(), true);
     var c = client(1);

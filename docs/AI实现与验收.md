@@ -133,9 +133,9 @@ flowchart LR
 
 ## 前端、流式响应与失败行为
 
-导购页展示流式答案、当前阶段、可展开资料、真实商品链接、历史对话、摘要状态、容量与 tokenizer 名称。个人记忆可开关和删除，后台显示真实入库状态。界面不是每次内部模型调用的完整追踪控制台，不暴露 API Key。
+导购页参考 [AICSS](https://www.aicss.dev/) 的轻量对话组件风格，使用 Ant Design 与项目已有主题实现原创界面：展示公开执行阶段、真实增量正文与生成光标、可展开引用、复制操作、历史对话与个人记忆。生成、保存、完成、失败和用户停止均有明确状态；向上翻阅历史时不强制滚回底部，可手动回到最新消息。浅色、深色与移动端沿用商城主题。界面不展示模型内部推理，也不暴露 API Key。
 
-后端从 Redis 会话确定用户，不信任请求 userId。单会话使用带归属令牌的 Redis 锁，单 AI 实例最多同时生成 3 个请求；锁忙或容量满返回明确错误。SSE 包含 meta、phase、sources、delta、done/error；未正常结束的半截回答不会作为完整历史保存。停止或连接异常会取消上游读取，客户端标示中断。单次请求与外部 HTTP 有超时。
+后端从 Redis 会话确定用户，不信任请求 userId。单会话使用带归属令牌的 Redis 锁，单 AI 实例最多同时生成 3 个请求；锁忙或容量满返回明确错误。SSE 包含 meta、phase、sources、delta、done/error；正文直接使用硅基流动 `stream: true` 的新增片段。心跳保持代理连接并帮助发现断开，响应禁止缓存与代理缓冲，Next.js 代理超时设置为 240 秒。只有正常完整输出并保存成功才发送 done；输出长度截断、异常 EOF、错误与取消不会作为完整回答持久化。停止会取消实际上游读取，生成线程退出后释放容量和 Redis 会话锁。
 
 文档和记忆作为证据数据进入提示词，无权修改系统规则；这与资源归属校验降低误用风险，但不等于证明抵抗所有提示注入。
 
@@ -156,10 +156,12 @@ mvn -f backend/pom.xml verify
 npm --prefix web run typecheck
 npm --prefix web test
 npm --prefix web run build
+# 使用本地模拟模型验证真实 Next → Gateway → AI SSE，不产生模型费用
+python scripts/sse-integration-test.py --env-file infra/.env --with-next
 ```
 
 存储脚本实际执行 S3 上传/读回/删除、Tika 中文解析、Neo4j 事务和 Milvus 插入/余弦检索，只清理自己创建的临时资源。付费脚本创建独立 QA 用户，检查 SSE 完成、答案和引用刷新一致、300 元预算与真实库存、跨用户会话读写拒绝、RocketMQ 记忆正向对照、停用记忆不写入、删除归属与效果；保留 QA 账号和审计记录。
 
-Java 测试覆盖整轮摘要、tokenizer 对照、切块、BM25、金额预算、记忆新旧与隔离策略、流式结束/异常/取消。真实 HTTP 与单元测试只证明覆盖的断言，不保证任意自然语言问题都正确。付费脚本应保留实际执行输出；默认模式打印 SKIP 的部分不能记作通过。
+Java 测试覆盖整轮摘要、tokenizer 对照、切块、BM25、金额预算、记忆新旧与隔离策略、流式提前输出/异常/取消。SSE 集成脚本启动隔离的 AI、Gateway 和最小 Next 代理，通过本地 HTTP 模拟模型检查：第一段正文在上游完成前到达、心跳与执行阶段、正常落库、截断与输出上限拒绝、明确超时、生成与重写阶段取消以及清理后的同会话重试。Next 验收使用实际配置与锁定版本，但不替代 React 界面验收；脚本不读取模型密钥文件，只停止自己创建的进程。结果和日志保留于 `.local/sse-integration/`。真实 HTTP 与单元测试只证明覆盖的断言，不保证任意自然语言问题都正确。付费脚本应保留实际执行输出；默认模式打印 SKIP 的部分不能记作通过。
 
-GitHub CI 执行源码检查、前后端构建测试、Compose 和真实商城交易集成，不配置私密模型密钥、不默认发起付费调用。提交级状态见 [GitHub Actions](https://github.com/yin-bo-Final/Bit-Select/actions)；本机真实 AI 验收与离线指标作为补充证据分别记录。
+GitHub CI 执行源码检查、前后端构建测试、Compose、真实商城交易集成与上述 SSE 模拟模型链路，不配置私密模型密钥、不默认发起付费调用。提交级状态见 [GitHub Actions](https://github.com/yin-bo-Final/Bit-Select/actions)；本机真实 AI 验收与离线指标作为补充证据分别记录。

@@ -3,6 +3,8 @@ package com.bitselect.ai;
 import static com.alibaba.cloud.ai.graph.action.AsyncNodeAction.node_async;
 
 import com.alibaba.cloud.ai.graph.*;
+import com.alibaba.cloud.ai.graph.action.AsyncNodeAction;
+import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.alibaba.cloud.ai.graph.state.strategy.ReplaceStrategy;
 import com.bitselect.contracts.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,6 +48,7 @@ public class AiWorkflow {
   public String run(
       long user, String conversation, String question, BiConsumer<String, Object> send)
       throws Exception {
+    var control = model.currentRequestControl();
     Map<String, KeyStrategy> strategies = new HashMap<>();
     for (String key : List.of("query", "intent", "evidence", "sources", "memories"))
       strategies.put(key, new ReplaceStrategy());
@@ -53,9 +56,10 @@ public class AiWorkflow {
         new StateGraph(() -> strategies)
             .addNode(
                 "rewrite",
-                node_async(
+                requestNode(
+                    control,
                     state -> {
-                      send.accept("phase", Map.of("label", "理解问题"));
+                      phase(send, "rewrite", "running", "理解问题");
                       String recent =
                           json.writeValueAsString(store.recentMessages(user, conversation));
                       String q =
@@ -72,12 +76,15 @@ public class AiWorkflow {
                                       "content",
                                       "近期对话：" + recent + "\n当前问题：" + question)),
                               500);
+                      phase(send, "rewrite", "completed", "理解问题");
                       return Map.of("query", q);
                     }))
             .addNode(
                 "intent",
-                node_async(
+                requestNode(
+                    control,
                     state -> {
+                      phase(send, "intent", "running", "识别需求");
                       String q = state.value("query").orElse(question).toString();
                       var classified =
                           model.json(
@@ -93,21 +100,21 @@ public class AiWorkflow {
                       String intent = classified.path("intent").asText("general");
                       if (!Set.of("recommend", "compare", "manual", "order", "wallet", "general")
                           .contains(intent)) intent = "general";
+                      phase(send, "intent", "completed", "识别需求");
                       return Map.of("intent", intent);
                     }))
             .addNode(
                 "retrieve",
-                node_async(
+                requestNode(
+                    control,
                     state -> {
                       String q = state.value("query").orElse(question).toString(),
                           intent = state.value("intent").orElse("general").toString();
-                      send.accept(
-                          "phase",
-                          Map.of(
-                              "label",
-                              Set.of("order", "wallet").contains(intent)
-                                  ? "查询实时业务数据"
-                                  : "查找说明书与偏好"));
+                      phase(
+                          send,
+                          "retrieve",
+                          "running",
+                          Set.of("order", "wallet").contains(intent) ? "查询实时业务数据" : "查找说明书与偏好");
                       List<Map<String, Object>> memories = memory.recall(user, q);
                       List<Map<String, Object>> sources;
                       String live;
@@ -200,6 +207,7 @@ public class AiWorkflow {
                       if (sources.isEmpty()
                           && !Set.of("order", "wallet", "general").contains(intent))
                         evidence += "\n未检索到已发布说明书，不得虚构具体商品参数或推荐链接；可询问需求。";
+                      phase(send, "retrieve", "completed", "资料已就绪");
                       return Map.of("evidence", evidence, "sources", sources, "memories", memories);
                     }))
             .addEdge(StateGraph.START, "rewrite")
@@ -209,11 +217,43 @@ public class AiWorkflow {
     var result = flow.compile().invoke(Map.of()).orElseThrow();
     Object sources = result.value("sources").orElse(List.of());
     send.accept("sources", Map.of("items", sources));
-    send.accept("phase", Map.of("label", "整理回答"));
+    phase(send, "compose", "running", "整理回答");
     var messages =
         store.context(user, conversation, question, result.value("evidence").orElse("").toString());
     String answer = model.stream(messages, text -> send.accept("delta", Map.of("content", text)));
+    model.checkRequest();
+    phase(send, "compose", "completed", "回答已生成");
+    phase(send, "save", "running", "保存会话");
+    model.checkRequest();
     store.save(user, conversation, question, answer, sources);
+    phase(send, "save", "completed", "会话已保存");
     return answer;
+  }
+
+  private AsyncNodeAction requestNode(SiliconFlowClient.RequestControl control, NodeAction action) {
+    // The graph may execute nodes on another thread. Never rely on a ThreadLocal being inherited.
+    return node_async(
+        state -> {
+          var previous = model.currentRequestControl();
+          boolean rebound = control != null && previous != control;
+          try {
+            if (rebound) model.bindRequest(control);
+            model.checkRequest();
+            var result = action.apply(state);
+            model.checkRequest();
+            return result;
+          } finally {
+            if (rebound) {
+              model.clearRequest();
+              Thread.interrupted();
+              if (previous != null) model.bindRequest(previous);
+            }
+          }
+        });
+  }
+
+  private static void phase(
+      BiConsumer<String, Object> send, String code, String status, String label) {
+    send.accept("phase", Map.of("code", code, "status", status, "label", label));
   }
 }

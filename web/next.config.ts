@@ -5,6 +5,8 @@ const config: NextConfig = {
   agentRules: false,
   devIndicators: false,
   poweredByHeader: false,
+  // Keep the rewrite proxy open past the AI request's 170-second deadline.
+  experimental: { proxyTimeout: 240000 },
   async rewrites() {
     return [
       {
