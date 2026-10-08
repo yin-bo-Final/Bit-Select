@@ -207,11 +207,13 @@ jobs:
         with:
           name: integration-logs
           path: .local/logs/
+          include-hidden-files: true
       - name: 保留 SSE 集成证据
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sse-integration-evidence
+          include-hidden-files: true
           path: |
             .local/sse-integration/*/results.json
             .local/sse-integration/*/ai.log
