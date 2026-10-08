@@ -3,6 +3,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Alert, Button, Form, Input, Tabs } from "antd";
+import {
+  ArrowRight,
+  Fingerprint,
+  LockKey,
+  ShoppingBag,
+  Sparkle,
+  UserCircle,
+} from "@phosphor-icons/react";
+import { ProductImage } from "@/components/common";
 import { post, errorText } from "@/lib/api";
 import { useSession } from "@/components/providers";
 
@@ -30,18 +39,53 @@ export default function LoginPage() {
     }
   };
   return (
-    <div className="auth-layout">
+    <div className="auth-layout commerce-auth">
       <div className="auth-intro">
-        <span className="brand-mark large">b.</span>
+        <div className="commerce-auth-brand">
+          <span className="brand-mark large">b.</span>
+          <span>
+            比特严选<span>为日常，选得更好</span>
+          </span>
+        </div>
         <h1>
           你的日常，
           <br />
           值得认真挑选。
         </h1>
         <p>收藏喜欢的生活，从一次好选择开始。</p>
-        <Link href="/">先逛逛商品 →</Link>
+        <Link href="/">
+          先逛逛商品 <ArrowRight size={18} />
+        </Link>
+        <div className="commerce-auth-display" aria-hidden="true">
+          <div className="commerce-auth-product commerce-auth-product-main">
+            <ProductImage
+              product={{ name: "无线键盘", imageUrl: "/products/BS-0041.svg" }}
+            />
+          </div>
+          <div className="commerce-auth-product commerce-auth-product-small">
+            <ProductImage
+              product={{
+                name: "氮化镓充电器",
+                imageUrl: "/products/BS-0001.svg",
+              }}
+            />
+          </div>
+        </div>
+        <div className="commerce-auth-benefits">
+          <span>
+            <ShoppingBag size={20} />
+            精选商品
+          </span>
+          <span>
+            <Sparkle size={20} />
+            专属导购
+          </span>
+        </div>
       </div>
       <section className="auth-panel">
+        <div className="commerce-auth-icon">
+          <Fingerprint size={28} weight="duotone" />
+        </div>
         <h2>{mode === "login" ? "欢迎回来" : "认识一下"}</h2>
         <p className="muted">
           {mode === "login"
@@ -80,6 +124,7 @@ export default function LoginPage() {
             ]}
           >
             <Input
+              prefix={<UserCircle size={19} aria-hidden="true" />}
               autoComplete="username"
               placeholder="输入用户名"
               maxLength={32}
@@ -110,6 +155,7 @@ export default function LoginPage() {
             ]}
           >
             <Input.Password
+              prefix={<LockKey size={19} aria-hidden="true" />}
               autoComplete={
                 mode === "register" ? "new-password" : "current-password"
               }
@@ -117,7 +163,13 @@ export default function LoginPage() {
               maxLength={72}
             />
           </Form.Item>
-          <Button block type="primary" htmlType="submit" loading={busy}>
+          <Button
+            block
+            type="primary"
+            size="large"
+            htmlType="submit"
+            loading={busy}
+          >
             {mode === "login" ? "登录" : "创建账户"}
           </Button>
         </Form>

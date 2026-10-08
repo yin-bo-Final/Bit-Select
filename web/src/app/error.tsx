@@ -8,6 +8,7 @@ export default function ErrorPage({
 }) {
   return (
     <Result
+      className="page-result"
       status="error"
       title="页面暂时未能加载"
       subTitle="请重新尝试。如果问题持续，请检查本地服务是否正常运行。"

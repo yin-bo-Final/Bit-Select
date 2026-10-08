@@ -19,7 +19,8 @@ import {
 } from "@phosphor-icons/react";
 import { api, money, errorText } from "@/lib/api";
 import type { Product } from "@/lib/types";
-import { ErrorState, LoadingState, ProductImage } from "@/components/common";
+import { ErrorState, LoadingState } from "@/components/common";
+import { ProductStage } from "@/components/product-stage";
 import { useSession } from "@/components/providers";
 
 export default function ProductDetail({
@@ -70,7 +71,7 @@ export default function ProductDetail({
     );
   if (!product) return <LoadingState />;
   return (
-    <div className="product-detail-page">
+    <div className="product-detail-page bs-detail-page">
       <Breadcrumb
         items={[
           { title: <Link href="/">精选好物</Link> },
@@ -78,63 +79,67 @@ export default function ProductDetail({
           { title: product.name },
         ]}
       />
-      <section className="product-detail">
-        <div className="detail-art">
-          <ProductImage product={product} priority />
+      <section className="bs-product-detail" aria-labelledby="product-title">
+        <div className="bs-detail-visual">
+          <ProductStage product={product} variant="detail" priority />
         </div>
-        <div className="detail-copy">
-          <p className="eyebrow">{product.categoryName || product.category}</p>
-          <h1>{product.name}</h1>
-          <p className="detail-description">{product.description}</p>
-          <div className="detail-tags">
+        <div className="bs-detail-copy">
+          <p className="bs-detail-category">
+            {product.categoryName || product.category}
+          </p>
+          <h1 id="product-title">{product.name}</h1>
+          <p className="bs-detail-description">{product.description}</p>
+          <div className="bs-detail-tags">
             {product.tags?.map((tag) => (
               <Tag key={tag}>{tag}</Tag>
             ))}
           </div>
-          <div className="detail-price">
-            <strong>{money(product.priceCents)}</strong>
-            {!!product.originalPriceCents &&
-              product.originalPriceCents > product.priceCents && (
-                <del>{money(product.originalPriceCents)}</del>
-              )}
-          </div>
-          <p className="stock-note">
-            {product.stock > 0 ? `现货 ${product.stock} 件` : "商品暂时售罄"} ·
-            平台余额支付
-          </p>
-          <div className="quantity-control">
-            <label htmlFor="quantity">购买数量</label>
-            <InputNumber
-              id="quantity"
-              min={1}
-              max={Math.min(99, product.stock)}
-              value={quantity}
-              onChange={(value) => setQuantity(value || 1)}
-              disabled={!product.stock}
-            />
-          </div>
-          <div className="purchase-actions">
-            <Button
-              type="primary"
-              size="large"
-              disabled={!product.stock}
-              loading={busy}
-              onClick={() => addToCart(true)}
-            >
-              立即选购 <ArrowRight size={18} />
-            </Button>
-            <Button
-              size="large"
-              icon={<ShoppingBag size={19} />}
-              disabled={!product.stock}
-              loading={busy}
-              onClick={() => addToCart(false)}
-            >
-              加入购物袋
-            </Button>
+          <div className="bs-purchase-panel">
+            <div className="bs-detail-price">
+              <strong>{money(product.priceCents)}</strong>
+              {!!product.originalPriceCents &&
+                product.originalPriceCents > product.priceCents && (
+                  <del>{money(product.originalPriceCents)}</del>
+                )}
+            </div>
+            <p className="bs-stock-note">
+              {product.stock > 0 ? `现货 ${product.stock} 件` : "商品暂时售罄"}{" "}
+              · 平台余额支付
+            </p>
+            <div className="bs-quantity-control">
+              <label htmlFor="quantity">购买数量</label>
+              <InputNumber
+                id="quantity"
+                min={1}
+                max={Math.min(99, product.stock)}
+                value={quantity}
+                onChange={(value) => setQuantity(value || 1)}
+                disabled={!product.stock}
+              />
+            </div>
+            <div className="bs-purchase-actions">
+              <Button
+                type="primary"
+                size="large"
+                disabled={!product.stock}
+                loading={busy}
+                onClick={() => addToCart(true)}
+              >
+                立即选购 <ArrowRight size={18} />
+              </Button>
+              <Button
+                size="large"
+                icon={<ShoppingBag size={19} />}
+                disabled={!product.stock}
+                loading={busy}
+                onClick={() => addToCart(false)}
+              >
+                加入购物袋
+              </Button>
+            </div>
           </div>
           <Link
-            className="ask-product"
+            className="bs-ask-product"
             href={`/assistant?product=${product.id}&name=${encodeURIComponent(product.name)}`}
           >
             <ChatCircleDots size={21} />
@@ -143,7 +148,7 @@ export default function ProductDetail({
           </Link>
         </div>
       </section>
-      <section className="detail-information">
+      <section className="detail-information bs-detail-information">
         <Tabs
           items={[
             {
@@ -166,7 +171,7 @@ export default function ProductDetail({
               key: "manual",
               label: "说明与售后",
               children: (
-                <div className="manual-info">
+                <div className="manual-info bs-manual-info">
                   <p>{product.description}</p>
                   <p>
                     付款前可随时取消订单；已付款、未发货的订单支持退款。发货后可查询物流、确认收货或提交整单退货申请，由管理员验收后退款。

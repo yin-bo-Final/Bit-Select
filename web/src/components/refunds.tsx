@@ -14,6 +14,14 @@ import {
 } from "antd";
 import { api, post, date, money, errorText } from "@/lib/api";
 import type { RefundRequest } from "@/lib/types";
+import {
+  ArrowUUpLeft,
+  ArrowClockwise,
+  Receipt,
+  Clock,
+  CheckCircle,
+  XCircle,
+} from "@phosphor-icons/react";
 const labels: Record<string, string> = {
   REQUESTED: "待审核",
   REJECTED: "已拒绝",
@@ -44,8 +52,11 @@ export function RefundRequestButton({
   };
   return (
     <>
-      <Button onClick={() => setOpen(true)}>申请退货</Button>
+      <Button icon={<ArrowUUpLeft size={17} />} onClick={() => setOpen(true)}>
+        申请退货
+      </Button>
       <Modal
+        className="commerce-modal"
         title="申请整单退货"
         open={open}
         onCancel={() => {
@@ -137,13 +148,22 @@ export function Refunds({
     }
   };
   return (
-    <section className="refund-section">
+    <section className="refund-section commerce-section commerce-refunds">
       <div className="heading-with-action">
-        <h2>{admin ? "售后审核" : "我的售后"}</h2>
-        <Button onClick={load}>刷新售后</Button>
+        <div className="commerce-section-title">
+          <ArrowUUpLeft size={23} />
+          <div>
+            <h2>{admin ? "售后审核" : "我的售后"}</h2>
+            <p>退货申请与退款进度。</p>
+          </div>
+        </div>
+        <Button icon={<ArrowClockwise size={17} />} onClick={load}>
+          刷新售后
+        </Button>
       </div>
       {error && <Alert type="error" title={error} />}
       <Table<RefundRequest>
+        className={`commerce-table ${admin ? "" : "commerce-refund-table"}`}
         rowKey="id"
         dataSource={items}
         loading={loading}
@@ -151,8 +171,20 @@ export function Refunds({
         pagination={{ pageSize: 10, hideOnSinglePage: true }}
         locale={{ emptyText: <Empty description="暂无售后申请" /> }}
         columns={[
-          { title: "订单号", dataIndex: "orderNo" },
-          { title: "金额", dataIndex: "totalCents", render: money },
+          {
+            title: "订单号",
+            dataIndex: "orderNo",
+            render: (value) => (
+              <span className="commerce-reference">{value}</span>
+            ),
+          },
+          {
+            title: "金额",
+            dataIndex: "totalCents",
+            render: (value) => (
+              <strong className="commerce-mono">{money(value)}</strong>
+            ),
+          },
           { title: "原因", dataIndex: "reason", width: 220 },
           {
             title: "状态",
@@ -190,7 +222,44 @@ export function Refunds({
           },
         ]}
       />
+      {!admin && (
+        <div className="commerce-refund-mobile" aria-busy={loading}>
+          {loading ? (
+            <p className="muted">正在加载售后记录…</p>
+          ) : !items.length ? (
+            <Empty
+              image={<Receipt size={48} weight="thin" />}
+              description="暂无售后申请"
+            />
+          ) : (
+            items.map((item) => (
+              <article key={item.id} className="commerce-refund-item">
+                <header>
+                  <span className="commerce-refund-state">
+                    {item.status === "COMPLETED" ? (
+                      <CheckCircle size={19} />
+                    ) : item.status === "REJECTED" ? (
+                      <XCircle size={19} />
+                    ) : (
+                      <Clock size={19} />
+                    )}
+                    {labels[item.status] || item.status}
+                  </span>
+                  <strong>{money(item.totalCents)}</strong>
+                </header>
+                <p className="commerce-reference">订单 {item.orderNo}</p>
+                <p>{item.reason}</p>
+                <div className="commerce-refund-review">
+                  {item.reviewReason || "等待处理"}
+                </div>
+                <time>{date(item.createdAt)}</time>
+              </article>
+            ))
+          )}
+        </div>
+      )}
       <Modal
+        className="commerce-modal"
         title={
           review?.action === "approve" ? "确认退货验收并退款" : "拒绝退货申请"
         }

@@ -1,0 +1,1108 @@
+/* Functional workspaces share the store's light/dark design tokens. */
+.precision-assistant {
+  grid-template-columns: 248px minmax(0, 1fr);
+  height: calc(
+    100dvh - var(--header-height) - var(--announcement-height) - 40px
+  );
+  min-height: 0;
+  margin: 20px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.precision-assistant .conversation-sidebar {
+  padding: 24px 16px 16px;
+  background: var(--subtle);
+}
+.workspace-sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 8px 24px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+.workspace-sidebar-title svg {
+  color: var(--accent);
+}
+.new-conversation-button.ant-btn {
+  height: 42px;
+  box-shadow: none;
+}
+.history-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 30px 8px 14px;
+}
+.precision-assistant .history-section-heading h2,
+.precision-drawer .history-section-heading h2 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.history-section-heading > span {
+  font: 11px var(--font-mono);
+  color: var(--muted);
+}
+.precision-assistant .conversation-list {
+  padding-bottom: 8px;
+}
+.precision-assistant .conversation-list button,
+.precision-drawer .conversation-list button {
+  gap: 10px;
+  padding: 12px 11px;
+  border-radius: var(--radius-sm);
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+.precision-assistant .conversation-list button > span,
+.precision-drawer .conversation-list button > span {
+  font-size: 12px;
+}
+.precision-assistant .conversation-list button small,
+.precision-drawer .conversation-list button small {
+  font-size: 11px;
+  margin-top: 6px;
+}
+.precision-assistant .conversation-list button:hover,
+.precision-drawer .conversation-list button:hover {
+  background: var(--surface);
+}
+.precision-assistant .conversation-list button.active,
+.precision-drawer .conversation-list button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.precision-assistant .conversation-list button.active > svg {
+  color: var(--accent);
+}
+.conversation-empty {
+  padding: 28px 12px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.conversation-empty > svg {
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.conversation-empty p {
+  color: var(--text);
+  margin: 0 0 5px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.conversation-empty span {
+  display: block;
+  font-size: 12px;
+}
+.precision-assistant .memory-shortcut,
+.precision-drawer .memory-shortcut {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 14px 12px;
+  margin-top: 18px;
+  transition: border-color 160ms ease;
+}
+.precision-assistant .memory-shortcut:hover,
+.precision-drawer .memory-shortcut:hover {
+  border-color: var(--accent);
+}
+.precision-assistant .memory-shortcut small,
+.precision-drawer .memory-shortcut small {
+  font-size: 11px;
+}
+.precision-assistant .chat-header {
+  padding: 20px 28px;
+  flex-shrink: 0;
+  gap: 16px;
+}
+.precision-assistant .assistant-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+.precision-assistant .chat-title h1 {
+  font-size: 16px;
+  font-weight: 650;
+  margin-bottom: 4px;
+}
+.precision-assistant .chat-title p {
+  font-size: 11px;
+  color: var(--muted);
+}
+.precision-assistant .chat-header-actions {
+  flex-shrink: 0;
+}
+.precision-assistant .chat-header-actions .ant-btn {
+  border-radius: var(--radius-sm);
+}
+.precision-assistant .chat-transcript {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.precision-assistant .chat-welcome {
+  max-width: 680px;
+  margin: auto;
+  padding: clamp(30px, 5vh, 58px) 36px 28px;
+  text-align: left;
+}
+.welcome-intro {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 26px;
+}
+.precision-assistant .welcome-mark {
+  width: 52px;
+  height: 52px;
+  margin: 0;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+.welcome-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.precision-assistant .chat-welcome h2 {
+  font-size: clamp(26px, 2.8vw, 36px);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1.45;
+  margin: 0 0 15px;
+  color: var(--text);
+}
+.precision-assistant .chat-welcome > p {
+  max-width: 420px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.9;
+}
+.precision-assistant .suggestion-grid {
+  gap: 10px;
+  margin: 28px 0 22px;
+}
+.precision-assistant .suggestion-grid button {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 16px;
+  gap: 12px;
+  padding: 17px 15px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+.precision-assistant .suggestion-grid button:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.precision-assistant .suggestion-grid button:active {
+  transform: translateY(0);
+}
+.suggestion-icon {
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+}
+.suggestion-copy {
+  min-width: 0;
+}
+.suggestion-copy strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+.suggestion-copy small {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.precision-assistant .chat-welcome .assistant-intro {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 11px;
+  max-width: none;
+}
+.precision-assistant .assistant-intro svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.precision-assistant .message-list {
+  max-width: 830px;
+  padding: 30px 36px 12px;
+}
+.precision-assistant .chat-message {
+  margin-bottom: 28px;
+  animation: workspace-enter 180ms ease both;
+}
+.precision-assistant .message-author {
+  font-size: 12px;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.precision-assistant .assistant-message .message-author > svg {
+  color: var(--accent);
+}
+.precision-assistant .message-content {
+  font-size: 14px;
+  line-height: 1.9;
+}
+.precision-assistant .user-message {
+  max-width: 82%;
+  padding: 17px 20px;
+  border-radius: var(--radius);
+  background: var(--subtle);
+}
+.precision-assistant .user-message .message-author {
+  font-size: 11px;
+  margin-bottom: 7px;
+}
+.precision-assistant .answer-sources {
+  margin-top: 18px;
+  padding-top: 6px;
+}
+.precision-assistant .source-label {
+  font-size: 12px;
+  color: var(--muted);
+  gap: 8px;
+}
+.source-count {
+  padding: 1px 6px;
+  background: var(--accent-soft);
+  border-radius: 5px;
+  font: 11px var(--font-mono);
+  color: var(--accent);
+}
+.precision-assistant .source-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.precision-assistant .source-item {
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: var(--subtle);
+  border-radius: var(--radius-sm);
+}
+.source-item-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.source-document-icon {
+  display: inline-flex;
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.precision-assistant .source-item strong {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.precision-assistant .source-item > p {
+  font-size: 11px;
+  margin: 10px 0;
+  line-height: 1.8;
+}
+.precision-assistant .source-full {
+  font-size: 11px;
+  color: var(--muted);
+}
+.precision-assistant .source-full summary {
+  cursor: pointer;
+  padding: 5px 0;
+}
+.precision-assistant .source-item a {
+  font-size: 11px;
+  margin-top: 10px;
+}
+.precision-assistant .chat-composer-area {
+  padding: 10px 28px 16px;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.precision-assistant .conversation-stats {
+  max-width: 760px;
+  margin: 0 auto 8px;
+}
+.context-summary-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+.context-summary-label > span {
+  color: var(--accent);
+  margin-left: auto;
+}
+.precision-assistant .conversation-stats p {
+  font-size: 12px;
+  line-height: 1.85;
+  margin-bottom: 6px;
+}
+.precision-assistant .chat-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  align-items: end;
+  gap: 8px 12px;
+  max-width: 760px;
+  margin: auto;
+  padding: 13px 14px;
+  background: var(--subtle);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.precision-assistant .chat-composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.composer-label {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+}
+.precision-assistant .chat-composer .ant-input {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 2px 0;
+  font-size: 13px;
+  line-height: 1.7;
+  resize: none;
+}
+.precision-assistant .chat-composer > .ant-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+}
+.precision-assistant .composer-note {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  max-width: 760px;
+  margin: 10px auto 0;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.6;
+  text-align: left;
+}
+.composer-shortcut {
+  white-space: nowrap;
+}
+.composer-shortcut kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.precision-assistant .chat-loading {
+  padding: 48px 36px;
+  max-width: 700px;
+  margin: auto;
+  text-align: left;
+}
+.precision-assistant button:focus-visible,
+.precision-drawer button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.precision-drawer .ant-drawer-content {
+  background: var(--surface);
+}
+.precision-drawer .ant-drawer-header {
+  border-color: var(--line);
+  padding: 24px;
+}
+.precision-drawer .ant-drawer-body {
+  padding: 24px;
+}
+.precision-history-drawer .ant-drawer-body {
+  display: flex;
+  flex-direction: column;
+}
+.memory-drawer-intro {
+  margin-bottom: 15px;
+  color: var(--accent);
+}
+.memory-drawer-intro h2 {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 600;
+  margin: 14px 0 0;
+  letter-spacing: -0.035em;
+}
+.precision-drawer .memory-description {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.9;
+}
+.precision-drawer .memory-preference {
+  padding: 18px;
+  margin: 22px 0;
+  background: var(--subtle);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.precision-drawer .memory-preference strong {
+  font-size: 13px;
+}
+.precision-drawer .memory-preference p {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.memory-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 26px 0 16px;
+}
+.memory-list-heading h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+.precision-drawer .memory-list {
+  gap: 12px;
+}
+.precision-drawer .memory-list article {
+  background: var(--subtle);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 18px;
+}
+.precision-drawer .memory-list article p {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.precision-drawer .memory-list footer > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.precision-admin {
+  padding-top: 12px;
+}
+.workspace-page-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 28px;
+  margin: 10px 0 32px;
+}
+.workspace-section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 12px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 550;
+}
+.workspace-page-heading h1 {
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1.35;
+  margin: 0 0 10px;
+}
+.workspace-page-heading p {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.8;
+}
+.overview-refresh {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.overview-refresh > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.precision-admin .admin-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+  margin-bottom: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.admin-stat-item {
+  padding: 22px 24px;
+  min-width: 0;
+}
+.admin-stat-item + .admin-stat-item {
+  border-left: 1px solid var(--line);
+}
+.admin-stat-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 18px;
+}
+.admin-stat-label svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.precision-admin .admin-stats .ant-statistic-content {
+  font-family: var(--font-mono);
+  color: var(--text);
+  font-size: clamp(22px, 2.2vw, 30px);
+  font-weight: 500;
+  letter-spacing: -0.05em;
+  line-height: 1.3;
+}
+.precision-admin .admin-stats .ant-skeleton-input {
+  max-width: 100%;
+  min-width: 70px;
+}
+.admin-workbench {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.precision-admin .admin-workspace-tabs > .ant-tabs-nav {
+  margin: 0;
+  padding: 0 24px;
+  background: var(--subtle);
+}
+.precision-admin .admin-workspace-tabs > .ant-tabs-nav .ant-tabs-tab {
+  padding: 20px 0;
+  font-size: 13px;
+}
+.precision-admin
+  .admin-workspace-tabs
+  > .ant-tabs-nav
+  .ant-tabs-tab
+  + .ant-tabs-tab {
+  margin-left: 32px;
+}
+.admin-workspace-tabs .ant-tabs-tab-btn > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.precision-admin
+  .admin-workspace-tabs
+  > :is(.ant-tabs-body-holder, .ant-tabs-content-holder) {
+  padding: 28px 24px 20px;
+  min-width: 0;
+}
+.workspace-section-heading {
+  margin-bottom: 23px;
+}
+.workspace-section-heading h2 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin: 0 0 7px;
+}
+.workspace-section-heading p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 0;
+}
+.precision-admin .admin-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.precision-admin .admin-toolbar > .ant-input-search {
+  width: 320px;
+  max-width: 100%;
+}
+.precision-admin .admin-toolbar > .muted {
+  font-size: 12px;
+  margin: 0;
+}
+.precision-admin .ant-table {
+  font-size: 12px;
+  background: var(--surface);
+}
+.precision-admin .ant-table-wrapper {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.precision-admin .ant-table-thead > tr > th {
+  background: var(--subtle);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.precision-admin .ant-table-cell {
+  padding: 16px !important;
+  vertical-align: middle;
+}
+.precision-admin .ant-table-tbody > tr > td {
+  border-color: var(--line);
+}
+.precision-admin .ant-table-wrapper .ant-table-pagination {
+  margin: 16px !important;
+}
+.precision-admin .ant-table-cell .ant-btn {
+  white-space: nowrap;
+}
+.precision-admin .ant-table-cell .ant-tag {
+  font-size: 11px;
+  border-radius: 5px;
+}
+.admin-product-cell {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.admin-product-thumbnail {
+  display: block;
+  position: relative;
+  width: 48px;
+  height: 48px;
+  background: var(--subtle);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.admin-product-thumbnail .product-image {
+  object-fit: contain;
+}
+.admin-product-cell > span:last-child {
+  min-width: 0;
+}
+.admin-product-cell strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.7;
+}
+.admin-product-cell small {
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+  font: 10px var(--font-mono);
+}
+.precision-admin-modal .ant-modal-content {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.precision-admin-modal .ant-modal-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+.precision-admin-modal .ant-modal-body {
+  padding-top: 16px;
+}
+.precision-admin-modal .ant-form-item-label > label {
+  font-size: 12px;
+}
+.precision-admin-modal .ant-form-item {
+  margin-bottom: 20px;
+}
+.precision-admin .knowledge-operation-state {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.knowledge-operation-state > svg {
+  color: var(--accent);
+}
+.knowledge-operation-state small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 5px;
+}
+.precision-admin .knowledge-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  padding: 20px 0;
+  margin: 0 0 24px;
+  border: 0;
+  background: var(--subtle);
+  border-radius: var(--radius-sm);
+}
+.knowledge-stat-item {
+  min-width: 0;
+  padding: 0 22px;
+}
+.knowledge-stat-item + .knowledge-stat-item {
+  border-left: 1px solid var(--line);
+}
+.knowledge-stat-item .admin-stat-label {
+  margin-bottom: 12px;
+}
+.precision-admin .knowledge-stats .ant-statistic-content {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  color: var(--text);
+}
+.knowledge-stat-item .ant-skeleton-input {
+  min-width: 60px;
+  max-width: 100%;
+}
+.knowledge-document-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+}
+.knowledge-document-link > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.knowledge-document-link small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+  font: 10px var(--font-mono);
+}
+@keyframes workspace-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 1200px) {
+  .precision-assistant {
+    grid-template-columns: 224px minmax(0, 1fr);
+  }
+  .precision-assistant .chat-header {
+    padding: 18px 22px;
+  }
+  .precision-assistant .chat-welcome {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+  .admin-stat-item {
+    padding: 20px 17px;
+  }
+  .overview-refresh > span {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .precision-assistant {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .precision-assistant .conversation-sidebar {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .precision-assistant .chat-welcome {
+    padding: 28px 24px;
+  }
+  .precision-assistant .suggestion-grid button {
+    grid-template-columns: minmax(0, 1fr) 16px;
+  }
+  .precision-assistant .suggestion-icon {
+    display: none;
+  }
+  .precision-admin .admin-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .admin-stat-item:nth-child(4) {
+    border-left: 0;
+  }
+  .admin-stat-item:nth-child(n + 4) {
+    border-top: 1px solid var(--line);
+  }
+  .admin-stat-item:last-child {
+    grid-column: span 2;
+  }
+}
+@media (max-width: 768px) {
+  .precision-assistant {
+    grid-template-columns: minmax(0, 1fr);
+    height: calc(
+      100dvh - var(--header-height) - var(--announcement-height) - 24px
+    );
+    min-height: 0;
+    margin: 12px 0;
+  }
+  .precision-assistant .conversation-sidebar {
+    display: none;
+  }
+  .precision-assistant .mobile-history {
+    display: inline-flex !important;
+  }
+  .precision-assistant .chat-header {
+    padding: 16px 20px;
+  }
+  .precision-assistant .chat-welcome {
+    max-width: 580px;
+    padding: 30px 26px 20px;
+  }
+  .precision-assistant .chat-welcome h2 {
+    font-size: 29px;
+  }
+  .precision-assistant .suggestion-grid button {
+    grid-template-columns: 25px minmax(0, 1fr) 16px;
+  }
+  .precision-assistant .suggestion-icon {
+    display: flex;
+  }
+  .precision-assistant .message-list {
+    padding: 24px 22px 12px;
+  }
+  .precision-assistant .chat-composer-area {
+    padding: 8px 20px 14px;
+  }
+  .workspace-page-heading {
+    gap: 18px;
+    align-items: flex-start;
+  }
+  .workspace-page-heading h1 {
+    font-size: 30px;
+  }
+  .workspace-page-heading p {
+    max-width: 300px;
+  }
+  .precision-admin .admin-workspace-tabs > .ant-tabs-nav {
+    padding: 0 18px;
+  }
+  .precision-admin
+    .admin-workspace-tabs
+    > :is(.ant-tabs-body-holder, .ant-tabs-content-holder) {
+    padding: 22px 18px 14px;
+  }
+  .precision-admin
+    .admin-workspace-tabs
+    > .ant-tabs-nav
+    .ant-tabs-tab
+    + .ant-tabs-tab {
+    margin-left: 24px;
+  }
+  .precision-admin .knowledge-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 22px;
+  }
+  .knowledge-stat-item:nth-child(3) {
+    border-left: 0;
+  }
+}
+@media (max-width: 480px) {
+  .precision-assistant {
+    border-radius: var(--radius-sm);
+    min-height: 0;
+  }
+  .precision-assistant .chat-header {
+    padding: 15px 14px;
+    gap: 8px;
+  }
+  .precision-assistant .chat-title {
+    gap: 9px;
+  }
+  .precision-assistant .assistant-avatar {
+    width: 34px;
+    height: 34px;
+  }
+  .precision-assistant .chat-title h1 {
+    font-size: 14px;
+  }
+  .precision-assistant .chat-title p {
+    display: none;
+  }
+  .precision-assistant .chat-welcome {
+    padding: 26px 19px 18px;
+  }
+  .welcome-intro {
+    margin-bottom: 18px;
+  }
+  .precision-assistant .welcome-mark {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-sm);
+  }
+  .precision-assistant .welcome-mark svg {
+    width: 28px;
+    height: 28px;
+  }
+  .precision-assistant .chat-welcome h2 {
+    font-size: 27px;
+    margin-bottom: 12px;
+  }
+  .precision-assistant .chat-welcome > p {
+    font-size: 14px;
+  }
+  .precision-assistant .suggestion-grid {
+    gap: 8px;
+    margin: 22px 0 18px;
+  }
+  .precision-assistant .suggestion-grid button {
+    grid-template-columns: minmax(0, 1fr) 14px;
+    padding: 13px 12px;
+    gap: 6px;
+  }
+  .precision-assistant .suggestion-icon {
+    display: none;
+  }
+  .suggestion-copy strong {
+    font-size: 14px;
+  }
+  .suggestion-copy small {
+    font-size: 12px;
+  }
+  .precision-assistant .chat-welcome .assistant-intro {
+    font-size: 12px;
+  }
+  .precision-assistant .chat-composer-area {
+    padding: 8px 12px 12px;
+  }
+  .precision-assistant .chat-composer {
+    padding: 10px 12px;
+  }
+  .precision-assistant .composer-note {
+    font-size: 11px;
+  }
+  .precision-assistant .composer-shortcut {
+    display: none;
+  }
+  .context-summary-label {
+    font-size: 10px;
+    gap: 5px;
+  }
+  .precision-assistant .message-list {
+    padding: 22px 16px 10px;
+  }
+  .precision-assistant .message-content {
+    font-size: 13px;
+  }
+  .precision-assistant .user-message {
+    max-width: 94%;
+    padding: 14px 16px;
+  }
+  .precision-assistant .source-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .precision-drawer .ant-drawer-body {
+    padding: 20px;
+  }
+  .workspace-page-heading {
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  .workspace-page-heading h1 {
+    font-size: 29px;
+  }
+  .workspace-page-heading p {
+    max-width: none;
+    font-size: 12px;
+  }
+  .overview-refresh {
+    width: 100%;
+    justify-content: space-between;
+    flex-direction: row-reverse;
+  }
+  .overview-refresh > span {
+    display: block;
+    font-size: 10px;
+  }
+  .precision-admin .admin-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-stat-item {
+    padding: 18px;
+  }
+  .admin-stat-item:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .admin-stat-item:nth-child(4) {
+    border-left: 1px solid var(--line);
+  }
+  .admin-stat-item:last-child {
+    border-left: 0;
+  }
+  .admin-stat-label {
+    font-size: 11px;
+    margin-bottom: 14px;
+  }
+  .precision-admin .admin-stats .ant-statistic-content {
+    font-size: 27px;
+  }
+  .precision-admin
+    .admin-workspace-tabs
+    > :is(.ant-tabs-body-holder, .ant-tabs-content-holder) {
+    padding: 22px 14px 12px;
+  }
+  .precision-admin .admin-workspace-tabs > .ant-tabs-nav {
+    padding: 0 14px;
+  }
+  .workspace-section-heading h2 {
+    font-size: 18px;
+  }
+  .workspace-section-heading p {
+    font-size: 11px;
+  }
+  .precision-admin .admin-toolbar {
+    gap: 12px;
+  }
+  .precision-admin .admin-toolbar > .ant-input-search {
+    width: 100%;
+  }
+  .precision-admin .knowledge-admin .admin-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .knowledge-operation-state small {
+    line-height: 1.6;
+  }
+  .precision-admin .knowledge-admin .order-actions {
+    justify-content: flex-end;
+  }
+  .knowledge-stat-item {
+    padding: 0 16px;
+  }
+  .precision-admin .ant-table-cell {
+    padding: 13px !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .precision-assistant *,
+  .precision-drawer *,
+  .precision-admin * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

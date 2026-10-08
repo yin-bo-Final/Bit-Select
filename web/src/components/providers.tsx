@@ -32,6 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [dark, setDark] = useState(false);
+  const [themeReady, setThemeReady] = useState(false);
   const refresh = useCallback(async () => {
     try {
       setUser(await api<User>("/auth/me"));
@@ -45,21 +46,32 @@ export function Providers({ children }: { children: React.ReactNode }) {
     void refresh();
   }, [refresh]);
   useEffect(() => {
-    const preference = localStorage.getItem("bit-select-theme");
+    let preference: string | null = null;
+    try {
+      preference = localStorage.getItem("bit-select-theme");
+    } catch {}
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     setDark(preference ? preference === "dark" : media.matches);
+    setThemeReady(true);
     const listener = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem("bit-select-theme")) setDark(e.matches);
+      try {
+        if (!localStorage.getItem("bit-select-theme")) setDark(e.matches);
+      } catch {
+        setDark(e.matches);
+      }
     };
     media.addEventListener("change", listener);
     return () => media.removeEventListener("change", listener);
   }, []);
   useEffect(() => {
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
-  }, [dark]);
+    if (themeReady)
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+  }, [dark, themeReady]);
   const toggleTheme = () =>
     setDark((value) => {
-      localStorage.setItem("bit-select-theme", value ? "light" : "dark");
+      try {
+        localStorage.setItem("bit-select-theme", value ? "light" : "dark");
+      } catch {}
       return !value;
     });
   const logout = async () => {
@@ -72,17 +84,33 @@ export function Providers({ children }: { children: React.ReactNode }) {
       theme={{
         algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
-          colorPrimary: "#315bce",
-          borderRadius: 8,
+          colorPrimary: dark ? "#709cff" : "#245bdb",
+          borderRadius: 10,
           fontFamily:
-            '"Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif',
+            'var(--font-display), "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif',
           fontSize: 14,
           controlHeight: 40,
-          colorBgBase: dark ? "#17191e" : "#fcfcfd",
+          colorBgBase: dark ? "#10141b" : "#fafbfd",
+          colorText: dark ? "#edf2fb" : "#18202f",
+          colorTextSecondary: dark ? "#a3adc0" : "#5d687b",
+          colorBorder: dark ? "#303a4b" : "#d9e0ec",
+          colorBgContainer: dark ? "#171e29" : "#ffffff",
+          colorTextPlaceholder: dark ? "#929eb3" : "#667185",
         },
         components: {
-          Button: { primaryShadow: "none" },
+          Button: {
+            primaryShadow: "none",
+            primaryColor: dark ? "#10141b" : "#ffffff",
+            colorPrimary: dark ? "#709cff" : "#245bdb",
+            colorPrimaryHover: dark ? "#8cafff" : "#194cc4",
+            colorPrimaryActive: dark ? "#567fdf" : "#1743ac",
+          },
           Card: { boxShadowTertiary: "none" },
+          Table: {
+            headerBg: dark ? "#1d2634" : "#f1f4f9",
+            cellPaddingBlock: 16,
+          },
+          Tabs: { titleFontSize: 14 },
         },
       }}
     >

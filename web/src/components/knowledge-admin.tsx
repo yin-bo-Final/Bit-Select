@@ -1,8 +1,15 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Alert, App, Button, Statistic, Table, Tag } from "antd";
-import { ArrowClockwise } from "@phosphor-icons/react";
+import { Alert, App, Button, Skeleton, Statistic, Table, Tag } from "antd";
+import {
+  ArrowClockwise,
+  BookOpenText,
+  CheckCircle,
+  FileText,
+  Stack,
+  WarningCircle,
+} from "@phosphor-icons/react";
 import { api, post, date, errorText } from "@/lib/api";
 type KnowledgeDocument = {
   id: string;
@@ -26,6 +33,7 @@ export function KnowledgeAdmin() {
     documents: [],
   });
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const { message, modal } = App.useApp();
@@ -33,6 +41,7 @@ export function KnowledgeAdmin() {
     setLoading(true);
     try {
       setData(await api<KnowledgeStatus>("/ai/knowledge"));
+      setLoaded(true);
       setError("");
     } catch (e) {
       setError(errorText(e));
@@ -77,8 +86,22 @@ export function KnowledgeAdmin() {
     });
   return (
     <section className="knowledge-admin">
+      <div className="workspace-section-heading">
+        <h2>导购知识库</h2>
+        <p>从商品说明书到可引用的回答，查看每份资料的同步结果。</p>
+      </div>
       <div className="admin-toolbar">
-        <p className="muted">说明书解析、语义切块和向量索引的实时入库状态。</p>
+        <div className="knowledge-operation-state">
+          <BookOpenText size={21} />
+          <span>
+            {data.running ? "正在同步商品资料" : "商品说明书管理"}
+            <small>
+              {data.running
+                ? "同步过程中每 5 秒刷新状态"
+                : "同步新增或变更的说明书，可重试失败文档"}
+            </small>
+          </span>
+        </div>
         <div className="order-actions">
           <Button
             icon={<ArrowClockwise size={17} />}
@@ -97,7 +120,9 @@ export function KnowledgeAdmin() {
           </Button>
         </div>
       </div>
-      {error && <Alert type="error" title={error} className="form-alert" />}
+      {error && (
+        <Alert type="error" showIcon title={error} className="form-alert" />
+      )}
       {data.running && (
         <Alert
           type="info"
@@ -107,36 +132,73 @@ export function KnowledgeAdmin() {
         />
       )}
       <div className="knowledge-stats">
-        <Statistic title="文档总数" value={data.documents.length} />
-        <Statistic
-          title="已完成"
-          value={
-            data.documents.filter((item) => item.status === "READY").length
-          }
-        />
-        <Statistic
-          title="知识片段"
-          value={data.documents.reduce((sum, item) => sum + item.chunkCount, 0)}
-        />
-        <Statistic
-          title="待重试"
-          value={
-            data.documents.filter((item) => item.status === "FAILED").length
-          }
-        />
+        {[
+          {
+            title: "文档总数",
+            value: data.documents.length,
+            icon: <FileText size={18} />,
+          },
+          {
+            title: "已完成",
+            value: data.documents.filter((item) => item.status === "READY")
+              .length,
+            icon: <CheckCircle size={18} />,
+          },
+          {
+            title: "知识片段",
+            value: data.documents.reduce(
+              (sum, item) => sum + item.chunkCount,
+              0,
+            ),
+            icon: <Stack size={18} />,
+          },
+          {
+            title: "待重试",
+            value: data.documents.filter((item) => item.status === "FAILED")
+              .length,
+            icon: <WarningCircle size={18} />,
+          },
+        ].map(({ title, value, icon }) => (
+          <div className="knowledge-stat-item" key={title}>
+            <div className="admin-stat-label">
+              {title}
+              {icon}
+            </div>
+            {loaded ? (
+              <Statistic value={value} />
+            ) : (
+              <Skeleton.Input active size="small" />
+            )}
+          </div>
+        ))}
       </div>
       <Table<KnowledgeDocument>
         rowKey="id"
         dataSource={data.documents}
         pagination={{ pageSize: 10, showSizeChanger: true }}
         loading={loading && !data.documents.length}
-        scroll={{ x: 760 }}
+        scroll={{ x: 900 }}
+        locale={{
+          emptyText: loaded
+            ? "还没有商品资料。点击同步知识库，导入说明书。"
+            : "正在读取知识库状态",
+        }}
         columns={[
           {
             title: "商品说明书",
             dataIndex: "title",
+            width: 320,
             render: (title, item) => (
-              <Link href={`/products/${item.productId}`}>{title}</Link>
+              <Link
+                className="knowledge-document-link"
+                href={`/products/${item.productId}`}
+              >
+                <FileText size={19} />
+                <span>
+                  {title}
+                  <small>商品 ID {item.productId}</small>
+                </span>
+              </Link>
             ),
           },
           {
