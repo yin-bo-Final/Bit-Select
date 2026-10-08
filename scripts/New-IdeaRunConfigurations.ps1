@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$JavaHome,
-    [string]$NodeInterpreter
+    [string]$NodeInterpreter,
+    [switch]$UpdateExistingConfigurations
 )
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path $PSScriptRoot -Parent
@@ -113,7 +114,58 @@ foreach ($includeFrontend in @($false, $true)) {
 '@
     Write-RunConfiguration $fileName ($content.Replace('{NAME}', $name).Replace('{ENTRIES}', ($entries -join "`n")))
 }
+
+$workspacePath = Join-Path $repositoryRoot '.idea/workspace.xml'
+if ($UpdateExistingConfigurations -and (Test-Path -LiteralPath $workspacePath)) {
+    $workspace = [xml]::new()
+    $workspace.PreserveWhitespace = $true
+    $workspace.Load($workspacePath)
+    $updatedCount = 0
+    foreach ($configuration in $workspace.SelectNodes('/project/component[@name="RunManager"]/configuration[@type="SpringBootApplicationConfigurationType"]')) {
+        $mainOption = $configuration.SelectSingleNode('option[@name="SPRING_BOOT_MAIN_CLASS"]')
+        $moduleOption = $configuration.SelectSingleNode('module')
+        if ($null -eq $mainOption -or $null -eq $moduleOption) { continue }
+        $application = $applications | Where-Object { $_.main -eq $mainOption.GetAttribute('value') -and $_.module -eq $moduleOption.GetAttribute('name') } | Select-Object -First 1
+        if ($null -eq $application) { continue }
+        $before = $configuration.OuterXml
+        [xml]$reference = Get-Content -LiteralPath (Join-Path $outputDirectory "Bit_Select_$($application.module.Replace('-', '_')).xml") -Raw
+        foreach ($optionName in @('WORKING_DIRECTORY', 'envFilePaths')) {
+            $replacement = $workspace.ImportNode($reference.SelectSingleNode("/component/configuration/option[@name='$optionName']"), $true)
+            $existing = $configuration.SelectSingleNode("option[@name='$optionName']")
+            if ($null -eq $existing) { $null = $configuration.AppendChild($replacement) }
+            else { $null = $configuration.ReplaceChild($replacement, $existing) }
+        }
+        $environment = $configuration.SelectSingleNode('envs')
+        if ($null -eq $environment) {
+            $environment = $workspace.CreateElement('envs')
+            $null = $configuration.AppendChild($environment)
+        }
+        foreach ($variable in $reference.SelectNodes('/component/configuration/envs/env')) {
+            $replacement = $workspace.ImportNode($variable, $true)
+            $existing = $environment.SelectSingleNode("env[@name='$($variable.GetAttribute('name'))']")
+            if ($null -eq $existing) { $null = $environment.AppendChild($replacement) }
+            else { $null = $environment.ReplaceChild($replacement, $existing) }
+        }
+        if ($configuration.OuterXml -ne $before) { $updatedCount++ }
+    }
+    if ($updatedCount -gt 0) {
+        $localDirectory = Join-Path $repositoryRoot '.local'
+        New-Item -ItemType Directory -Force $localDirectory | Out-Null
+        $backup = Join-Path $localDirectory 'idea-workspace.before-run-fix.xml'
+        if (-not (Test-Path -LiteralPath $backup)) { Copy-Item -LiteralPath $workspacePath -Destination $backup }
+        $settings = [Xml.XmlWriterSettings]::new()
+        $settings.Encoding = [Text.UTF8Encoding]::new($false)
+        $settings.Indent = $false
+        $settings.NewLineHandling = [Xml.NewLineHandling]::None
+        $writer = [Xml.XmlWriter]::Create($workspacePath, $settings)
+        try { $workspace.Save($writer) } finally { $writer.Dispose() }
+    }
+    Write-Host "已为 $updatedCount 个现有 Spring Boot 启动项更新环境文件、工作目录和数据路径；其他个人设置保留。"
+}
 Write-Host '已更新 7 个本地 IDEA 运行配置：4 个后端、前端、全部后端和全部应用。'
 Write-Host '后端使用 Java 21 和 IDEA 原生环境文件支持（2025.3+），无需安装 .env 插件。'
 Write-Host '配置只引用环境文件路径，不含凭证；.idea/ 已被 Git 忽略。'
 Write-Host '先启动 WSL Docker 中间件，再在 IDEA 选择 Bit Select - 全部应用；原有运行进程需先停止。'
+if (-not $UpdateExistingConfigurations) {
+    Write-Host '若要补齐 AiApplication 等已有启动项，请先关闭本项目，再使用 -UpdateExistingConfigurations 执行脚本并重新打开项目。'
+}

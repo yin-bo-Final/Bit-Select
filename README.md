@@ -79,7 +79,7 @@ AI_CONTEXT_TOKENS=262144
 pwsh ./scripts/New-IdeaRunConfigurations.ps1
 ```
 
-脚本识别本机 JDK 21 与 Node.js，生成以下七个运行项。可用 `-JavaHome` 和 `-NodeInterpreter` 显式指定安装路径。它只刷新自己管理的配置，其他运行项保留。
+脚本识别本机 JDK 21 与 Node.js，生成以下七个运行项。可用 `-JavaHome` 和 `-NodeInterpreter` 显式指定安装路径。默认只刷新这七项，其他运行项保留。
 
 | IDEA 运行项 | 用途 | HTTP 端口 |
 | --- | --- | --- |
@@ -94,6 +94,14 @@ pwsh ./scripts/New-IdeaRunConfigurations.ps1
 后端运行项通过 IDEA **原生环境文件支持**依次读取 `infra/.env`、根目录 `.env.local`（存在时），后者同名变量优先；不需要安装 `.env` 插件。启动时读取文件，修改已有文件的密码或模型密钥后只需重新运行相应服务。若之后才新建 `.env.local`，重新运行生成脚本添加引用。配置只保存文件路径，不保存密码或 API Key，整个 `.idea/` 被 Git 忽略。前端运行项仅设置网关地址，执行 `npm run dev -- --port 3000` 固定端口，Next.js 自行读取 `web/.env.local`，不会加载后端模型密钥。
 
 在 IDEA 停止原来的服务和前端进程，再从右上角选择 `Bit Select - 全部应用`，点击运行或调试。若运行列表尚未刷新，使用“文件 → 从磁盘重新加载所有文件”（或重新打开项目）。选择名称以 `Bit Select -` 开头的配置；IDEA 自动创建的 `AiApplication` 等临时配置不会自动继承这些环境文件设置。单独启动时，按 Catalog、Commerce、AI、Gateway、Web 的顺序运行；组合启动并行运行，等待所有服务就绪后访问商城。
+
+如果要继续使用已有的 `AiApplication`、`CatalogApplication`、`CommerceApplication`、`GatewayApplication` 启动项，先在 IDEA 关闭本项目，再执行：
+
+```powershell
+pwsh ./scripts/New-IdeaRunConfigurations.ps1 -UpdateExistingConfigurations
+```
+
+然后重新打开项目，重新启动服务。该选项按 Spring Boot 配置类型、主类和模块匹配本项目的已有运行项，补齐环境文件、工作目录、数据路径和端口，保留 VM 参数、调试设置及其他个人配置。原始 `workspace.xml` 首次修改前备份在 `.local/idea-workspace.before-run-fix.xml`。关闭项目是为了避免 IDEA 用内存中的旧设置覆盖修改。以后新增其他运行项时，需要再次补齐；修改磁盘配置不会改变已经启动的 Java 进程。
 
 IDEA 配置中的 `$PROJECT_DIR$` 必须指向仓库根目录，以便找到 `data/products.json` 和 `data/ranking/model.json`。如果已有项目将 `backend` 作为根目录，请重新在 IDEA 打开仓库根目录。业务应用由 IDEA 运行，中间件继续运行在 WSL Docker。
 
