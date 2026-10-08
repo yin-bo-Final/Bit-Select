@@ -93,16 +93,38 @@ test("incoming text between a downward gesture and its native movement preserves
   assert.equal(follow.isFollowing(), true);
 });
 
-test("downward intent without actual movement does not grant a delayed resume", () => {
+test("a downward gesture away from bottom cannot resume without reaching it", () => {
   const follow = createChatScrollFollow();
-  follow.observeLayout(position(700));
+  follow.observeLayout(position(600));
   follow.pause();
-  follow.userScroll("down", position(700));
-  follow.scroll(position(700));
+  follow.userScroll("down", position(600));
+  follow.scroll(position(600));
   assert.equal(follow.isFollowing(), false);
   follow.endUserScroll();
   follow.scroll(position(700));
   assert.equal(follow.isFollowing(), false);
+});
+
+test("a passive wheel can report the bottom after native scrolling already moved there", () => {
+  const follow = createChatScrollFollow();
+  follow.observeLayout(position(600));
+  follow.pause();
+  // Compositor scrolling can precede React's passive wheel handler.
+  follow.userScroll("down", position(700));
+  assert.equal(follow.isFollowing(), true);
+  follow.scroll(position(700));
+  follow.observeLayout(position(700, 1040));
+  assert.equal(follow.isFollowing(), true);
+});
+
+test("unrelated pointer release does not clear the downward wheel intent", () => {
+  const follow = createChatScrollFollow();
+  follow.observeLayout(position(600));
+  follow.pause();
+  follow.userScroll("down", position(600));
+  follow.endScrollbarDrag();
+  follow.scroll(position(700));
+  assert.equal(follow.isFollowing(), true);
 });
 
 test("a new downward action can reach bottom after an earlier programmatic scroll", () => {

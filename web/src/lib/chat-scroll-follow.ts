@@ -51,6 +51,7 @@ export function createChatScrollFollow() {
       // A queued old notification has no movement from this fresh baseline.
       programmaticTop = null;
       if (direction === "up") pause();
+      else if (atBottom(metrics)) resume();
       else downwardIntent = true;
     },
     observeLayout(metrics: ChatScrollMetrics) {
@@ -108,6 +109,7 @@ export function createChatScrollFollow() {
       draggingScrollbar = true;
     },
     endScrollbarDrag() {
+      if (!draggingScrollbar) return;
       const shouldResume =
         draggingScrollbar &&
         dragReachedBottom &&
