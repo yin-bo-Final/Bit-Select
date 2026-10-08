@@ -182,12 +182,32 @@ jobs:
           for service in catalog-service commerce-service gateway; do
             jar=$(find ".local/backend-jars/$service/target" -maxdepth 1 -name '*.jar' ! -name '*original*' | head -1)
             test -n "$jar"
-            java -Xms64m -Xmx256m -XX:ActiveProcessorCount=2 -jar "$jar" > ".local/logs/$service.log" 2>&1 &
+            java -Xms64m -Xmx256m -XX:ActiveProcessorCount=2 -jar "$jar" --management.endpoint.health.probes.enabled=true > ".local/logs/$service.log" 2>&1 &
           done
           jar=$(find .local/backend-jars/ai-service/target -maxdepth 1 -name '*.jar' ! -name '*original*' | head -1)
           test -n "$jar"
           export AI_RANKING_MODEL="$GITHUB_WORKSPACE/data/ranking/model.json"
           java -Xms64m -Xmx512m -XX:ActiveProcessorCount=2 -jar "$jar" > .local/logs/ai-service.log 2>&1 &
+      - name: 等待交易服务完成启动初始化
+        run: |
+          python - <<'PY'
+          import json, time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import ProxyHandler, build_opener
+          http = build_opener(ProxyHandler({}))
+          deadline = time.monotonic() + 180
+          while True:
+            try:
+              with http.open('http://127.0.0.1:8081/actuator/health/readiness', timeout=5) as response:
+                if json.load(response).get('status') == 'UP':
+                  break
+            except (HTTPError, URLError, TimeoutError, ConnectionError, ValueError):
+              pass
+            if time.monotonic() >= deadline:
+              raise RuntimeError('交易服务未就绪；管理员等 ApplicationRunner 必须完成后才能开始交易验收')
+            time.sleep(1)
+          print('PASS: 交易服务已就绪，启动初始化已完成')
+          PY
       - name: 验证真实交易链路
         run: python scripts/smoke-test.py --wait-seconds 180
       - name: 验证真实并发库存与支付
