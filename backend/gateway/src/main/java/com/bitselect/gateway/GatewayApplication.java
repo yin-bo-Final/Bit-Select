@@ -16,10 +16,25 @@ import reactor.core.publisher.Mono;
 @SpringBootApplication
 public class GatewayApplication {
   public static void main(String[] args) {
+    configureNacosLogging();
     String dashboard = System.getenv("SENTINEL_DASHBOARD");
     if (dashboard != null) System.setProperty("csp.sentinel.dashboard.server", dashboard);
     System.setProperty("project.name", "bit-gateway");
     SpringApplication.run(GatewayApplication.class, args);
+  }
+
+  static void configureNacosLogging() {
+    // Nacos rolling files must belong to one JVM; Windows cannot rename a shared open file.
+    System.getProperties()
+        .putIfAbsent(
+            "JM.LOG.PATH",
+            java.nio.file.Path.of(
+                    System.getProperty("user.home"),
+                    "logs",
+                    "bit-select",
+                    "gateway",
+                    Long.toString(ProcessHandle.current().pid()))
+                .toString());
   }
 
   @Bean
