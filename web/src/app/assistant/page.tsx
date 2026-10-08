@@ -38,6 +38,10 @@ import {
 } from "@phosphor-icons/react";
 import { api, date, errorText } from "@/lib/api";
 import { readEvents } from "@/lib/sse";
+import {
+  createChatScrollFollow,
+  chatScrollKeyDirection,
+} from "@/lib/chat-scroll-follow";
 import type { ChatMessage, Conversation, Memory, Source } from "@/lib/types";
 import { LoginGate } from "@/components/common";
 import {
@@ -53,6 +57,11 @@ type ConversationStats = {
   summaryPresent: boolean;
   tokenizer: string;
 };
+const scrollMetrics = (element: HTMLDivElement) => ({
+  scrollTop: element.scrollTop,
+  scrollHeight: element.scrollHeight,
+  clientHeight: element.clientHeight,
+});
 
 export default function AssistantPage() {
   return (
@@ -93,7 +102,8 @@ function Assistant() {
   const draft = useRef("");
   const transcript = useRef<HTMLDivElement | null>(null);
   const transcriptContent = useRef<HTMLDivElement | null>(null);
-  const followBottom = useRef(true);
+  const scrollFollow = useRef(createChatScrollFollow());
+  const touchY = useRef<number | null>(null);
   const inputRef = useRef<React.ComponentRef<typeof Input.TextArea>>(null);
   const { message: toast } = App.useApp();
   const updateDraft = useCallback((value: string) => {
@@ -133,13 +143,19 @@ function Assistant() {
     if (!element) return;
     if (!hasMessages) {
       element.scrollTop = 0;
-      followBottom.current = true;
+      scrollFollow.current.resume();
+      scrollFollow.current.didProgrammaticScroll(scrollMetrics(element));
       setShowLatest(false);
       return;
     }
-    if (followBottom.current) element.scrollTop = element.scrollHeight;
+    scrollFollow.current.observeLayout(scrollMetrics(element));
+    if (scrollFollow.current.isFollowing()) {
+      element.scrollTop = element.scrollHeight;
+      scrollFollow.current.didProgrammaticScroll(scrollMetrics(element));
+    }
     setShowLatest(
-      element.scrollHeight - element.clientHeight - element.scrollTop > 96,
+      element.scrollHeight - element.clientHeight - element.scrollTop >
+        (scrollFollow.current.isFollowing() ? 96 : 2),
     );
   }, [hasMessages]);
   useLayoutEffect(keepLatestVisible, [
@@ -153,8 +169,24 @@ function Assistant() {
     if (transcriptContent.current) observer.observe(transcriptContent.current);
     return () => observer.disconnect();
   }, [keepLatestVisible]);
+  useEffect(() => {
+    const finishDrag = () => scrollFollow.current.endScrollbarDrag();
+    window.addEventListener("pointerup", finishDrag);
+    window.addEventListener("pointercancel", finishDrag);
+    window.addEventListener("blur", finishDrag);
+    return () => {
+      window.removeEventListener("pointerup", finishDrag);
+      window.removeEventListener("pointercancel", finishDrag);
+      window.removeEventListener("blur", finishDrag);
+    };
+  }, []);
   const jumpToLatest = () => {
-    followBottom.current = true;
+    scrollFollow.current.resume();
+    // A deliberate jump must replace the previous reading-position baseline.
+    if (transcript.current)
+      scrollFollow.current.didProgrammaticScroll(
+        scrollMetrics(transcript.current),
+      );
     keepLatestVisible();
   };
   const loadConversation = async (id: string) => {
@@ -172,7 +204,11 @@ function Assistant() {
         stats?: ConversationStats;
       }>(`/ai/conversations/${id}`, { signal: controller.signal });
       if (!mounted.current || revision !== viewRevision.current) return;
-      followBottom.current = true;
+      scrollFollow.current.resume();
+      if (transcript.current)
+        scrollFollow.current.didProgrammaticScroll(
+          scrollMetrics(transcript.current),
+        );
       setMessages(
         result.messages.map((item, index) => ({
           ...item,
@@ -201,7 +237,7 @@ function Assistant() {
     if (activeRequest.current || historyRequest.current) return;
     ++viewRevision.current;
     activeConversation.current = null;
-    followBottom.current = true;
+    scrollFollow.current.resume();
     setMessages([]);
     setConversationId(null);
     setStats(null);
@@ -279,7 +315,11 @@ function Assistant() {
       setBusy(true);
       setAnnouncement("问题已发送，正在连接导购");
       setError("");
-      followBottom.current = true;
+      scrollFollow.current.resume();
+      if (transcript.current)
+        scrollFollow.current.didProgrammaticScroll(
+          scrollMetrics(transcript.current),
+        );
       setMessages((items) => [
         ...items,
         { id: `${id}-user`, role: "user", content: value },
@@ -565,21 +605,103 @@ function Assistant() {
           <div
             ref={transcript}
             className="chat-transcript"
+            tabIndex={0}
             aria-label="导购对话"
             aria-live="off"
+            onWheelCapture={(event) => {
+              if (!hasMessages || event.deltaY === 0) return;
+              scrollFollow.current.userScroll(
+                event.deltaY < 0 ? "up" : "down",
+                scrollMetrics(event.currentTarget),
+              );
+            }}
+            onKeyDownCapture={(event) => {
+              if (
+                !hasMessages ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.altKey
+              )
+                return;
+              const target = event.target as HTMLElement;
+              if (
+                target.closest(
+                  'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+                )
+              )
+                return;
+              if (
+                (event.key === " " || event.key === "Spacebar") &&
+                target.closest("button, a, summary")
+              )
+                return;
+              const direction = chatScrollKeyDirection(
+                event.key,
+                event.shiftKey,
+              );
+              if (direction)
+                scrollFollow.current.userScroll(
+                  direction,
+                  scrollMetrics(event.currentTarget),
+                );
+            }}
+            onTouchStart={(event) => {
+              touchY.current = event.touches[0]?.clientY ?? null;
+            }}
+            onTouchMove={(event) => {
+              const nextY = event.touches[0]?.clientY;
+              if (
+                hasMessages &&
+                touchY.current !== null &&
+                nextY !== undefined &&
+                nextY !== touchY.current
+              ) {
+                scrollFollow.current.userScroll(
+                  nextY > touchY.current ? "up" : "down",
+                  scrollMetrics(event.currentTarget),
+                );
+              }
+              touchY.current = nextY ?? null;
+            }}
+            onTouchEnd={() => {
+              touchY.current = null;
+            }}
+            onTouchCancel={() => {
+              touchY.current = null;
+              scrollFollow.current.endUserScroll();
+            }}
+            onPointerDownCapture={(event) => {
+              const element = event.currentTarget;
+              if (
+                !hasMessages ||
+                event.pointerType !== "mouse" ||
+                event.button !== 0 ||
+                event.target !== element ||
+                element.scrollHeight <= element.clientHeight
+              )
+                return;
+              const right = element.getBoundingClientRect().right;
+              const gutter = Math.max(
+                element.offsetWidth - element.clientWidth,
+                16,
+              );
+              if (event.clientX >= right - gutter && event.clientX <= right)
+                scrollFollow.current.beginScrollbarDrag(scrollMetrics(element));
+            }}
+            onScrollEnd={() => scrollFollow.current.endUserScroll()}
             onScroll={(event) => {
               if (!hasMessages) {
                 setShowLatest(false);
                 return;
               }
               const element = event.currentTarget;
-              const nearBottom =
-                element.scrollHeight -
-                  element.clientHeight -
-                  element.scrollTop <=
-                96;
-              followBottom.current = nearBottom;
-              setShowLatest(!nearBottom);
+              scrollFollow.current.scroll(scrollMetrics(element));
+              const distanceFromBottom =
+                element.scrollHeight - element.clientHeight - element.scrollTop;
+              setShowLatest(
+                distanceFromBottom >
+                  (scrollFollow.current.isFollowing() ? 96 : 2),
+              );
             }}
           >
             <div ref={transcriptContent}>
