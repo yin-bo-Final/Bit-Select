@@ -44,8 +44,8 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
         </div>
         <h1>登录后即可继续</h1>
         <p>你的购物袋、订单与专属导购，都在这里。</p>
-        <Link href="/login">
-          <Button type="primary">登录 / 注册</Button>
+        <Link href="/login" className="navigation-button">
+          登录 / 注册
         </Link>
       </div>
     );
@@ -54,9 +54,11 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
 export function ProductImage({
   product,
   priority = false,
+  sizes = "(max-width: 640px) 50vw, (max-width: 1024px) 45vw, 31vw",
 }: {
   product: Pick<Product, "imageUrl" | "name">;
   priority?: boolean;
+  sizes?: string;
 }) {
   const [failed, setFailed] = useState(false);
   if (failed || !product.imageUrl)
@@ -74,10 +76,11 @@ export function ProductImage({
       src={product.imageUrl}
       alt={product.name}
       fill
-      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+      sizes={sizes}
       className="product-image"
       unoptimized
-      preload={priority}
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : undefined}
       onError={() => setFailed(true)}
     />
   );
@@ -93,19 +96,26 @@ export function ProductCard({
     <article className="product-card">
       <Link href={`/products/${product.id}`} className="product-card-link">
         <div className="product-art">
+          <span className="product-art-orbit" aria-hidden="true" />
           <ProductImage product={product} priority={priority} />
         </div>
         <div className="product-copy">
           <p className="product-category">
             {product.categoryName || product.category}
+            {product.featured && <span>精选</span>}
+            {product.stock <= 0 && <span>售罄</span>}
           </p>
           <h3>{product.name}</h3>
           <p className="product-description">{product.description}</p>
           <div className="product-bottom">
             <strong>{money(product.priceCents)}</strong>
-            <span>
-              {product.stock > 0 ? "查看好物" : "暂时售罄"}
-              <ArrowUpRight size={17} />
+            <span className="product-visit">
+              <span className="product-visit-label">
+                {product.stock > 0 ? "查看好物" : "暂时售罄"}
+              </span>
+              <span className="product-visit-icon" aria-hidden="true">
+                <ArrowUpRight size={20} />
+              </span>
             </span>
           </div>
         </div>

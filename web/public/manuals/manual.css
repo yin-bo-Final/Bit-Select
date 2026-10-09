@@ -1,40 +1,46 @@
 :root {
   color-scheme: light;
   --paper: #fff;
-  --canvas: #f0f3f8;
-  --text: #18202f;
-  --muted: #5d687b;
-  --line: #d9e0ec;
-  --accent: #245bdb;
+  --canvas: #f3f6fc;
+  --text: #101d36;
+  --muted: #475872;
+  --line: #d6e1f2;
+  --accent: #225cff;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --paper: #171e29;
-    --canvas: #10141b;
-    --text: #edf2fb;
-    --muted: #a3adc0;
-    --line: #303a4b;
-    --accent: #709cff;
+    --paper: #111d32;
+    --canvas: #080e1c;
+    --text: #f0f5ff;
+    --muted: #b8c9e3;
+    --line: #2a3d5b;
+    --accent: #91b5ff;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --paper: #171e29;
-  --canvas: #10141b;
-  --text: #edf2fb;
-  --muted: #a3adc0;
-  --line: #303a4b;
-  --accent: #709cff;
+  --paper: #111d32;
+  --canvas: #080e1c;
+  --text: #f0f5ff;
+  --muted: #b8c9e3;
+  --line: #2a3d5b;
+  --accent: #91b5ff;
 }
 * {
   box-sizing: border-box;
 }
 html {
-  background: var(--canvas);
+  background:
+    radial-gradient(
+      ellipse at 90% 0%,
+      color-mix(in srgb, var(--accent) 9%, transparent),
+      transparent 65%
+    ),
+    var(--canvas);
 }
 body {
-  max-width: 900px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 34px 28px 64px;
   color: var(--text);
@@ -49,11 +55,11 @@ body {
 body > a {
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 44px;
   margin-bottom: 20px;
-  padding: 5px 13px;
+  padding: 7px 20px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 999px;
   background: var(--paper);
   color: var(--accent);
   font-size: 13px;
@@ -76,11 +82,9 @@ a:focus-visible {
 }
 pre {
   margin: 0;
-  padding: 42px 48px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--paper);
-  box-shadow: 0 12px 36px rgb(24 40 72 / 5%);
+  padding: 32px 12px;
+  border: 0;
+  background: transparent;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: inherit;
@@ -143,8 +147,7 @@ th {
     margin-bottom: 15px;
   }
   pre {
-    padding: 25px 22px;
-    border-radius: 12px;
+    padding: 20px 2px;
   }
   .manual-heading-1 {
     font-size: 23px;
@@ -176,6 +179,9 @@ th {
   }
   @page {
     margin: 18mm;
+  }
+  html {
+    background: #fff;
   }
   body {
     max-width: none;

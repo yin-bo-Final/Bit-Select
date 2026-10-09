@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="400" viewBox="0 0 512 400" role="img">
 <title>开放式耳机 · 进阶 093：原创商品概念图</title>
 <desc>根据商品名称绘制的原创矢量示意，展示基本形态；并非真实商品照片。</desc>
-<rect width="512" height="400" fill="#edf0f2"/>
 <ellipse cx="256" cy="329" rx="124" ry="11" fill="#dce2e7"/>
 <defs>
       <linearGradient id="pe5bc80e694bee5bc8fe880b3e69cba-3-body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c8af9c"/><stop offset=".55" stop-color="#b39177"/><stop offset="1" stop-color="#8f745f"/></linearGradient>
@@ -9,5 +8,4 @@
       <pattern id="pe5bc80e694bee5bc8fe880b3e69cba-3-fabric" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 1h5M1 0v5" stroke="#edf1f4" stroke-opacity=".13" stroke-width=".65"/></pattern>
       <pattern id="pe5bc80e694bee5bc8fe880b3e69cba-3-holes" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="1.35" fill="#26313c" fill-opacity=".45"/></pattern>
     </defs><g transform="translate(256 200) scale(1.015 0.996) translate(-256 -200)"><path d="M195 263C95 238 108 84 182 90C220 93 226 148 201 180" fill="none" stroke="#8f745f" stroke-width="19" stroke-linecap="round" stroke-linejoin="round" /><path d="M321 263C421 238 408 84 334 90C296 93 290 148 315 180" fill="none" stroke="#8f745f" stroke-width="19" stroke-linecap="round" stroke-linejoin="round" /><path d="M196 259C111 239 121 100 180 103" fill="none" stroke="#c8af9c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /><path d="M320 259C405 239 395 100 336 103" fill="none" stroke="#c8af9c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /><rect x="172" y="172" width="57" height="103" rx="25" fill="url(#pe5bc80e694bee5bc8fe880b3e69cba-3-body)" transform="rotate(22 200 220)"/><rect x="287" y="172" width="57" height="103" rx="25" fill="url(#pe5bc80e694bee5bc8fe880b3e69cba-3-body)" transform="rotate(-22 316 220)"/><ellipse cx="202" cy="194" rx="17" ry="8" fill="#26313c" /><ellipse cx="314" cy="194" rx="17" ry="8" fill="#26313c" /></g>
-<text x="256" y="374" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="11" letter-spacing="1" fill="#697784">BS-0093 · CONCEPT ILLUSTRATION</text>
 </svg>

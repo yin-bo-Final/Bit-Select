@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   FileText,
   ArrowRight,
+  ArrowUpRight,
 } from "@phosphor-icons/react";
 import { api, money, errorText } from "@/lib/api";
 import type { Product } from "@/lib/types";
@@ -91,6 +92,9 @@ export default function ProductDetail({
       <section className="bs-product-detail" aria-labelledby="product-title">
         <div className="bs-detail-visual">
           <ProductStage product={product} variant="detail" priority />
+          <p className="bs-detail-art-note">
+            商品概念插图 · 以规格与说明书为准
+          </p>
         </div>
         <div className="bs-detail-copy">
           <p className="bs-detail-category">
@@ -111,6 +115,7 @@ export default function ProductDetail({
             ))}
           </div>
           <div className="bs-purchase-panel">
+            <p className="bs-purchase-label">把喜欢的，带回日常。</p>
             <div className="bs-detail-price">
               <strong>{money(product.priceCents)}</strong>
               {!!product.originalPriceCents &&
@@ -160,11 +165,15 @@ export default function ProductDetail({
           >
             <ChatCircleDots size={21} />
             <span>想知道是否适合你？问问导购助手</span>
-            <ArrowRight size={18} />
+            <ArrowUpRight size={20} />
           </Link>
         </div>
       </section>
       <section className="detail-information bs-detail-information">
+        <div className="bs-detail-information-heading">
+          <h2>每一处，了解清楚。</h2>
+          <p>查看规格、使用说明与售后规则，再做决定。</p>
+        </div>
         <Tabs
           items={[
             {

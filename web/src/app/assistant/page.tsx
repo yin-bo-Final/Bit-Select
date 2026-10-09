@@ -745,6 +745,10 @@ function Assistant() {
                 </div>
               ) : !messages.length ? (
                 <div className="chat-welcome">
+                  <span
+                    className="assistant-welcome-orbit"
+                    aria-hidden="true"
+                  />
                   <div className="welcome-intro">
                     <span className="welcome-mark">
                       <ChatCircleDots size={36} weight="duotone" />
@@ -754,7 +758,7 @@ function Assistant() {
                   <h2>
                     想选得明白，
                     <br />
-                    我们一起看看。
+                    <span>我们一起看看。</span>
                   </h2>
                   <p>
                     从预算、使用习惯或一件心仪商品开始。

@@ -4,9 +4,11 @@ import Link from "next/link";
 import { Alert, App, Button, Skeleton, Statistic, Table, Tag } from "antd";
 import {
   ArrowClockwise,
+  ArrowRight,
   BookOpenText,
   CheckCircle,
   FileText,
+  Database,
   Stack,
   WarningCircle,
 } from "@phosphor-icons/react";
@@ -131,6 +133,20 @@ export function KnowledgeAdmin() {
           className="form-alert"
         />
       )}
+      <ol className="knowledge-pipeline" aria-label="知识库资料处理流程">
+        {[
+          { title: "解析说明书", icon: <FileText size={19} /> },
+          { title: "语义切块", icon: <Stack size={19} /> },
+          { title: "向量索引", icon: <Database size={19} /> },
+          { title: "回答引用", icon: <BookOpenText size={19} /> },
+        ].map((step, index) => (
+          <li key={step.title}>
+            <span>{step.icon}</span>
+            <strong>{step.title}</strong>
+            {index < 3 && <ArrowRight size={15} aria-hidden />}
+          </li>
+        ))}
+      </ol>
       <div className="knowledge-stats">
         {[
           {

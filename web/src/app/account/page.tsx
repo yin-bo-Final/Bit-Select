@@ -63,17 +63,25 @@ function Account() {
       </div>
       <section className="account-overview">
         <div className="wallet-panel">
-          <div className="commerce-wallet-label">
-            <Wallet size={23} />
-            <span>可用余额</span>
-            <span className="commerce-currency">CNY</span>
+          <div className="commerce-wallet-orbit" aria-hidden="true">
+            <Wallet size={44} weight="duotone" />
           </div>
-          <strong>{money(wallet?.balanceCents ?? user?.balanceCents)}</strong>
-          <div className="commerce-wallet-meta">
-            <span>比特严选钱包</span>
-            <span>账户 {user?.id}</span>
+          <div className="commerce-wallet-copy">
+            <div className="commerce-wallet-label">
+              <Wallet size={21} />
+              <span>可用余额</span>
+              <span className="commerce-currency">CNY</span>
+            </div>
+            <strong>{money(wallet?.balanceCents ?? user?.balanceCents)}</strong>
+            <div className="commerce-wallet-meta">
+              <span>比特严选钱包</span>
+              <span>账户 {user?.id}</span>
+            </div>
+            <p>平台余额仅用于本演示商城，联系管理员即可分配。</p>
+            <Link href="/" className="commerce-wallet-action">
+              去发现喜欢的好物 <ArrowUpRight size={18} />
+            </Link>
           </div>
-          <p>平台余额仅用于本演示商城，联系管理员即可分配。</p>
         </div>
         <div className="account-links">
           <Link href="/orders">

@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="400" viewBox="0 0 512 400" role="img">
 <title>旅行双肩包 · 进阶 189：原创商品概念图</title>
 <desc>根据商品名称绘制的原创矢量示意，展示基本形态；并非真实商品照片。</desc>
-<rect width="512" height="400" fill="#edf0f2"/>
 <ellipse cx="256" cy="329" rx="124" ry="11" fill="#dce2e7"/>
 <defs>
       <linearGradient id="pe69785e8a18ce58f8ce882a9e58c85-3-body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c8af9c"/><stop offset=".55" stop-color="#b39177"/><stop offset="1" stop-color="#8f745f"/></linearGradient>
@@ -9,5 +8,4 @@
       <pattern id="pe69785e8a18ce58f8ce882a9e58c85-3-fabric" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 1h5M1 0v5" stroke="#edf1f4" stroke-opacity=".13" stroke-width=".65"/></pattern>
       <pattern id="pe69785e8a18ce58f8ce882a9e58c85-3-holes" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="1.35" fill="#26313c" fill-opacity=".45"/></pattern>
     </defs><g transform="translate(256 200) scale(1.015 0.996) translate(-256 -200)"><path d="M204 107V90q0-45 53-45t53 45v17" fill="none" stroke="#8f745f" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" /><path d="M179 142q-50 53-29 137M336 142q50 53 29 137" fill="none" stroke="#8f745f" stroke-width="17" stroke-linecap="round" stroke-linejoin="round" /><rect x="153" y="91" width="206" height="235" rx="50" fill="url(#pe69785e8a18ce58f8ce882a9e58c85-3-body)" /><rect x="160" y="96" width="192" height="225" rx="46" fill="url(#pe69785e8a18ce58f8ce882a9e58c85-3-fabric)" /><path d="M171 158q85-42 170 0" fill="none" stroke="#8f745f" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /><rect x="176" y="215" width="162" height="89" rx="21" fill="#bb9d86" /><path d="M190 234h133" fill="none" stroke="#8f745f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" /><rect x="310" y="230" width="10" height="25" rx="3" fill="url(#pe69785e8a18ce58f8ce882a9e58c85-3-metal)" /><path d="M167 191v83M346 191v83" fill="none" stroke="#c8af9c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></g>
-<text x="256" y="374" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="11" letter-spacing="1" fill="#697784">BS-0189 · CONCEPT ILLUSTRATION</text>
 </svg>

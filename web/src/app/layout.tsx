@@ -21,6 +21,7 @@ export const metadata: Metadata = {
   title: { default: "比特严选 · 好好选，慢慢用", template: "%s | 比特严选" },
   description:
     "精选电子产品与日常生活用品。让懂你的导购助手，帮你找到合适的那一件。",
+  icons: { icon: { url: "/favicon.svg", type: "image/svg+xml" } },
 };
 export default function RootLayout({
   children,
@@ -30,7 +31,7 @@ export default function RootLayout({
       <body className={manrope.variable}>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var p=localStorage.getItem('bit-select-theme');document.documentElement.dataset.theme=p==='dark'||(!p&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light'}catch{}`,
+            __html: `try{var p=localStorage.getItem('bit-select-theme');document.documentElement.dataset.theme=p==='dark'||(!p&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';document.documentElement.dataset.effects=localStorage.getItem('bit-select-effects')==='off'?'off':'on'}catch{}`,
           }}
         />
         <AntdRegistry>

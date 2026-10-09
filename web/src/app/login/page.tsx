@@ -57,6 +57,8 @@ export default function LoginPage() {
           先逛逛商品 <ArrowRight size={18} />
         </Link>
         <div className="commerce-auth-display" aria-hidden="true">
+          <span className="commerce-auth-orbit commerce-auth-orbit-outer" />
+          <span className="commerce-auth-orbit commerce-auth-orbit-inner" />
           <div className="commerce-auth-product commerce-auth-product-main">
             <ProductImage
               product={{ name: "无线键盘", imageUrl: "/products/BS-0041.svg" }}
@@ -84,7 +86,7 @@ export default function LoginPage() {
       </div>
       <section className="auth-panel">
         <div className="commerce-auth-icon">
-          <Fingerprint size={28} weight="duotone" />
+          <Fingerprint size={32} weight="duotone" />
         </div>
         <h2>{mode === "login" ? "欢迎回来" : "认识一下"}</h2>
         <p className="muted">
@@ -171,6 +173,7 @@ export default function LoginPage() {
             loading={busy}
           >
             {mode === "login" ? "登录" : "创建账户"}
+            <ArrowRight size={19} aria-hidden="true" />
           </Button>
         </Form>
         <p className="form-note">
