@@ -145,22 +145,28 @@ public class SiliconFlowClient {
   }
 
   public String complete(List<Map<String, String>> messages, int maxTokens) throws Exception {
-    return post(
-            "/chat/completions",
-            Map.of(
-                "model",
-                chatModel,
-                "messages",
-                messages,
-                "max_tokens",
-                maxTokens,
-                "temperature",
-                0.2))
-        .path("choices")
-        .path(0)
-        .path("message")
-        .path("content")
-        .asText();
+    var choice =
+        post(
+                "/chat/completions",
+                Map.of(
+                    "model",
+                    chatModel,
+                    "messages",
+                    messages,
+                    "max_tokens",
+                    maxTokens,
+                    "temperature",
+                    0.2))
+            .path("choices")
+            .path(0);
+    String reason = choice.path("finish_reason").asText("");
+    if (!reason.isEmpty() && !reason.equals("stop"))
+      throw new IllegalStateException(
+          reason.equals("length") ? "MODEL_RESPONSE_LIMIT" : "MODEL_RESPONSE_INCOMPLETE");
+    var content = choice.path("message").path("content");
+    if (!content.isTextual() || content.asText().isBlank())
+      throw new IllegalStateException("MODEL_EMPTY_RESPONSE");
+    return content.asText();
   }
 
   public String stream(List<Map<String, String>> messages, Consumer<String> delta)

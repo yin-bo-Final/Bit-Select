@@ -15,6 +15,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 final class ChatStream {
   private enum State {
     OPEN,
+    COMMITTING,
+    PERSISTED,
     SUCCEEDED,
     FAILED,
     CANCELLED
@@ -47,8 +49,11 @@ final class ChatStream {
     this(control, timeout, heartbeatInterval, emitter(timeout), OpsTraceStore.NOOP);
   }
 
-  ChatStream(SiliconFlowClient.RequestControl control, Duration timeout,
-      Duration heartbeatInterval, OpsTraceStore.Trace trace) {
+  ChatStream(
+      SiliconFlowClient.RequestControl control,
+      Duration timeout,
+      Duration heartbeatInterval,
+      OpsTraceStore.Trace trace) {
     this(control, timeout, heartbeatInterval, emitter(timeout), trace);
   }
 
@@ -72,8 +77,12 @@ final class ChatStream {
     this(control, timeout, heartbeatInterval, emitter, OpsTraceStore.NOOP);
   }
 
-  ChatStream(SiliconFlowClient.RequestControl control, Duration timeout,
-      Duration heartbeatInterval, SseEmitter emitter, OpsTraceStore.Trace trace) {
+  ChatStream(
+      SiliconFlowClient.RequestControl control,
+      Duration timeout,
+      Duration heartbeatInterval,
+      SseEmitter emitter,
+      OpsTraceStore.Trace trace) {
     this.control = control;
     this.emitter = emitter;
     this.trace = trace;
@@ -120,9 +129,16 @@ final class ChatStream {
   void send(String event, Object data) {
     eventWriteLock.lock();
     try {
-      if (state.get() != State.OPEN) throw new CancellationException("CLIENT_CLOSED");
+      boolean persistedPhase = state.get() == State.PERSISTED && event.equals("phase");
+      if (state.get() != State.OPEN && !persistedPhase)
+        throw new CancellationException("CLIENT_CLOSED");
       observe(() -> trace.event(event, data));
-      emitter.send(SseEmitter.event().name(event).data(data));
+      try {
+        emitter.send(SseEmitter.event().name(event).data(data));
+      } catch (Exception disconnected) {
+        if (persistedPhase) return; // A delivery failure cannot undo an already committed turn.
+        throw disconnected;
+      }
       if (event.equals("delta")) partial.set(true);
     } catch (Exception error) {
       cancel();
@@ -133,8 +149,9 @@ final class ChatStream {
   }
 
   void succeed(String conversation) {
-    if (!state.compareAndSet(State.OPEN, State.SUCCEEDED)) return;
-    observe(() -> trace.finish("completed", null));
+    boolean persisted = state.compareAndSet(State.PERSISTED, State.SUCCEEDED);
+    if (!persisted && !state.compareAndSet(State.OPEN, State.SUCCEEDED)) return;
+    if (!persisted) observe(() -> trace.finish("completed", null));
     stopTimers();
     eventWriteLock.lock();
     try {
@@ -149,7 +166,29 @@ final class ChatStream {
   }
 
   void fail(String code, String message) {
-    if (!state.compareAndSet(State.OPEN, State.FAILED)) return;
+    failFrom(State.OPEN, code, message);
+  }
+
+  /**
+   * Cancellation wins before this CAS; after acceptance, the bounded transaction decides outcome.
+   */
+  void persist(AiWorkflow.PersistenceAction save) throws Exception {
+    if (!state.compareAndSet(State.OPEN, State.COMMITTING))
+      throw new CancellationException("CLIENT_CLOSED");
+    stopTimers();
+    try {
+      save.run();
+      observe(() -> trace.event("phase", Map.of("code", "save", "status", "completed")));
+      observe(() -> trace.finish("completed", null));
+      state.set(State.PERSISTED);
+    } catch (Exception error) {
+      failFrom(State.COMMITTING, "AI_FAILED", "会话保存失败，请重试；本轮回答未写入会话。");
+      throw error;
+    }
+  }
+
+  private void failFrom(State expected, String code, String message) {
+    if (!state.compareAndSet(expected, State.FAILED)) return;
     observe(() -> trace.finish("failed", code));
     stopTimers();
     // Claim the terminal state and cancel upstream before waiting for a slow downstream write.
@@ -191,8 +230,9 @@ final class ChatStream {
   }
 
   private void observe(Runnable event) {
-    try { event.run(); }
-    catch (RuntimeException ignored) {
+    try {
+      event.run();
+    } catch (RuntimeException ignored) {
       // No monitoring error may change the stream state or block upstream cancellation.
     }
   }

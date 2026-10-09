@@ -10,6 +10,10 @@ spring:
     password: ${MYSQL_PASSWORD}
     hikari:
       maximum-pool-size: 5
+      connection-timeout: 5000
+      data-source-properties:
+        connectTimeout: 5000
+        socketTimeout: 10000
   data:
     redis:
       host: ${REDIS_HOST:127.0.0.1}

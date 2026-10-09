@@ -3,6 +3,8 @@ package com.bitselect.ai;
 import com.fasterxml.jackson.databind.*;
 import jakarta.annotation.PreDestroy;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.*;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.*;
@@ -198,6 +200,7 @@ public class MemoryService {
   public void publish() {
     if (!enabled) return;
     try {
+      reclaimExhaustedJobs();
       connect();
       var jobs =
           db.queryForList(
@@ -216,6 +219,14 @@ public class MemoryService {
       org.slf4j.LoggerFactory.getLogger(getClass())
           .debug("Memory queue unavailable: {}", e.getClass().getSimpleName());
     }
+  }
+
+  void reclaimExhaustedJobs() {
+    db.update(
+        "UPDATE ai_memory_job SET status='FAILED',error_code='ProcessingLeaseExpiredException',"
+            + "updated_at=CURRENT_TIMESTAMP WHERE status='PROCESSING' AND attempts>=8 AND"
+            + " updated_at<?",
+        Timestamp.from(Instant.now().minusSeconds(300)));
   }
 
   public void process(String jobId) throws Exception {

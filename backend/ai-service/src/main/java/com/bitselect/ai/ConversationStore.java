@@ -23,7 +23,8 @@ public class ConversationStore {
       @Value("${ai.context-tokens}") int capacity) {
     this.db = db;
     this.model = model;
-    this.tx = tx;
+    this.tx = new TransactionTemplate(Objects.requireNonNull(tx.getTransactionManager()), tx);
+    this.tx.setTimeout(tx.getTimeout() > 0 ? Math.min(5, tx.getTimeout()) : 5);
     this.json = json;
     this.capacity = capacity;
   }
