@@ -7,7 +7,6 @@ import {
   Button,
   Form,
   Input,
-  InputNumber,
   Modal,
   Select,
   Skeleton,
@@ -32,6 +31,11 @@ import {
   Wallet,
 } from "@phosphor-icons/react";
 import { api, post, date, money, errorText } from "@/lib/api";
+import {
+  parseMoneyCents,
+  parseReferencePrice,
+  parseInventoryDelta,
+} from "@/lib/admin-input";
 import type { Order, PageResult, Product, User } from "@/lib/types";
 import { orderLabels } from "@/lib/orders";
 import { ErrorState, LoginGate, ProductImage } from "@/components/common";
@@ -291,15 +295,22 @@ function Users() {
   const [target, setTarget] = useState<User | null>(null);
   const [busy, setBusy] = useState(false);
   const [form] = Form.useForm();
+  const amountCents = parseMoneyCents(
+    Form.useWatch("amount", form),
+    1,
+    10_000_000,
+  );
   const requestKey = useRequestKey();
   const operation = useRef("");
   const { message } = App.useApp();
   const { refresh } = useSession();
-  const credit = async (values: { amount: number; reason: string }) => {
-    if (!target) return;
+  const credit = async (values: { amount: string; reason: string }) => {
+    if (!target || busy) return;
+    const parsedAmount = parseMoneyCents(values.amount, 1, 10_000_000);
+    if (parsedAmount === null) return;
     setBusy(true);
     const payload = {
-      amountCents: Math.round(values.amount * 100),
+      amountCents: parsedAmount,
       reason: values.reason,
     };
     try {
@@ -401,28 +412,28 @@ function Users() {
         />
         <Form
           form={form}
+          name="admin-credit"
           layout="vertical"
           onFinish={credit}
           requiredMark={false}
+          disabled={busy}
         >
           <Form.Item
             name="amount"
             label="分配金额（元）"
             rules={[
-              { required: true, message: "请输入金额" },
               {
-                type: "number",
-                min: 0.01,
-                max: 100000,
-                message: "金额为 0.01-100000 元",
+                validator: async (_, value) => {
+                  if (parseMoneyCents(value, 1, 10_000_000) === null)
+                    throw new Error("金额为 0.01-100000 元，最多保留两位小数");
+                },
               },
             ]}
           >
-            <InputNumber
-              min={0.01}
-              max={100000}
-              precision={2}
+            <Input
+              inputMode="decimal"
               prefix="¥"
+              placeholder="0.00"
               className="full-width"
             />
           </Form.Item>
@@ -436,7 +447,13 @@ function Users() {
           >
             <Input maxLength={200} placeholder="例如：演示购物余额" />
           </Form.Item>
-          <Button block type="primary" htmlType="submit" loading={busy}>
+          <Button
+            block
+            type="primary"
+            htmlType="submit"
+            loading={busy}
+            disabled={busy || amountCents === null}
+          >
             确认分配
           </Button>
         </Form>
@@ -448,8 +465,8 @@ type ProductFormValues = {
   name: string;
   category: string;
   description: string;
-  price: number;
-  originalPrice?: number;
+  price: string;
+  originalPrice?: string;
   imageUrl: string;
   manualUrl?: string;
   tags?: string;
@@ -463,26 +480,66 @@ function Products() {
   const [categories, setCategories] = useState<{ id: string; name: string }[]>(
     [],
   );
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState("");
+  const categoriesRequest = useRef<AbortController | null>(null);
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [inventory, setInventory] = useState<Product | null>(null);
   const [busy, setBusy] = useState(false);
   const [form] = Form.useForm<ProductFormValues>();
   const [stockForm] = Form.useForm();
+  const priceCents = parseMoneyCents(
+    Form.useWatch("price", form),
+    1,
+    100_000_000,
+  );
+  const referencePriceCents = parseReferencePrice(
+    Form.useWatch("originalPrice", form),
+  );
+  const inventoryDelta = parseInventoryDelta(
+    Form.useWatch("delta", stockForm),
+    inventory?.stock || 0,
+  );
   const { message } = App.useApp();
   const requestKey = useRequestKey();
   const operation = useRef("");
-  useEffect(() => {
-    void api<{ id: string; name: string }[]>("/categories")
-      .then(setCategories)
-      .catch(() => {});
+  const loadCategories = useCallback(async () => {
+    categoriesRequest.current?.abort();
+    const controller = new AbortController();
+    categoriesRequest.current = controller;
+    setCategoriesLoading(true);
+    setCategoriesError("");
+    try {
+      const result = await api<{ id: string; name: string }[]>("/categories", {
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      if (!Array.isArray(result) || !result.length)
+        throw new Error("未读取到商品分类，请重新加载。");
+      setCategories(result);
+    } catch (e) {
+      if (!controller.signal.aborted) setCategoriesError(errorText(e));
+    } finally {
+      if (categoriesRequest.current === controller) {
+        categoriesRequest.current = null;
+        if (!controller.signal.aborted) setCategoriesLoading(false);
+      }
+    }
   }, []);
+  useEffect(() => {
+    void loadCategories();
+    return () => {
+      categoriesRequest.current?.abort();
+      categoriesRequest.current = null;
+    };
+  }, [loadCategories]);
   const openProduct = (item: Product | "new") => {
     form.resetFields();
     if (item !== "new")
       form.setFieldsValue({
         ...item,
-        price: item.priceCents / 100,
-        originalPrice: (item.originalPriceCents || 0) / 100,
+        price: (item.priceCents / 100).toFixed(2),
+        originalPrice: ((item.originalPriceCents || 0) / 100).toFixed(2),
         tags: item.tags?.join("，"),
         specifications: JSON.stringify(item.specifications || {}, null, 2),
       });
@@ -495,6 +552,14 @@ function Products() {
     setEditing(item);
   };
   const save = async (values: ProductFormValues) => {
+    if (!editing || busy) return;
+    if (categoriesLoading || categoriesError || !categories.length) {
+      message.warning("请先成功加载商品分类，再保存商品。");
+      return;
+    }
+    const parsedPrice = parseMoneyCents(values.price, 1, 100_000_000);
+    const parsedReference = parseReferencePrice(values.originalPrice);
+    if (parsedPrice === null || parsedReference === null) return;
     setBusy(true);
     try {
       const payload = {
@@ -504,8 +569,8 @@ function Products() {
           categories.find((item) => item.id === values.category)?.name ||
           values.category,
         description: values.description,
-        priceCents: Math.round(values.price * 100),
-        originalPriceCents: Math.round((values.originalPrice || 0) * 100),
+        priceCents: parsedPrice,
+        originalPriceCents: parsedReference,
         imageUrl: values.imageUrl,
         manualUrl: values.manualUrl || "",
         tags: (values.tags || "")
@@ -531,14 +596,17 @@ function Products() {
       setBusy(false);
     }
   };
-  const adjust = async (values: { delta: number; reason: string }) => {
-    if (!inventory) return;
+  const adjust = async (values: { delta: string; reason: string }) => {
+    if (!inventory || busy) return;
+    const delta = parseInventoryDelta(values.delta, inventory.stock);
+    if (delta === null) return;
+    const payload = { ...values, delta };
     setBusy(true);
     try {
       await post(`/admin/products/${inventory.id}/inventory`, {
-        ...values,
+        ...payload,
         idempotencyKey: requestKey({
-          ...values,
+          ...payload,
           product: inventory.id,
           operation: operation.current,
         }),
@@ -623,10 +691,27 @@ function Products() {
           type="primary"
           icon={<Plus size={18} />}
           onClick={() => openProduct("new")}
+          disabled={
+            categoriesLoading || !!categoriesError || !categories.length
+          }
         >
           新建商品
         </Button>
       </div>
+      {categoriesError && (
+        <Alert
+          className="form-alert"
+          type="error"
+          showIcon
+          title="商品分类加载失败"
+          description={categoriesError}
+          action={
+            <Button onClick={loadCategories} loading={categoriesLoading}>
+              重新加载分类
+            </Button>
+          }
+        />
+      )}
       {list.error && <ErrorState error={list.error} retry={list.load} />}
       <Table<Product>
         rowKey="id"
@@ -647,11 +732,26 @@ function Products() {
         footer={null}
         forceRender
       >
+        {categoriesError && (
+          <Alert
+            className="form-alert"
+            type="error"
+            showIcon
+            title="商品分类加载失败，暂时无法保存商品"
+            action={
+              <Button onClick={loadCategories} loading={categoriesLoading}>
+                重新加载分类
+              </Button>
+            }
+          />
+        )}
         <Form
           form={form}
+          name="admin-product"
           layout="vertical"
           onFinish={save}
           requiredMark={false}
+          disabled={busy}
         >
           <div className="form-grid">
             <Form.Item
@@ -670,6 +770,8 @@ function Products() {
               rules={[{ required: true, message: "请选择分类" }]}
             >
               <Select
+                loading={categoriesLoading}
+                disabled={categoriesLoading || !!categoriesError}
                 options={categories.map((category) => ({
                   value: category.id,
                   label: category.name,
@@ -691,24 +793,33 @@ function Products() {
               name="price"
               label="售价（元）"
               rules={[
-                { required: true, message: "请输入售价" },
-                { type: "number", min: 0.01, max: 1000000 },
+                {
+                  validator: async (_, value) => {
+                    if (parseMoneyCents(value, 1, 100_000_000) === null)
+                      throw new Error(
+                        "售价为 0.01-1000000 元，最多保留两位小数",
+                      );
+                  },
+                },
               ]}
             >
-              <InputNumber
-                min={0.01}
-                max={1000000}
-                precision={2}
-                className="full-width"
-              />
+              <Input inputMode="decimal" prefix="¥" className="full-width" />
             </Form.Item>
-            <Form.Item name="originalPrice" label="参考价（元）">
-              <InputNumber
-                min={0}
-                max={1000000}
-                precision={2}
-                className="full-width"
-              />
+            <Form.Item
+              name="originalPrice"
+              label="参考价（元）"
+              rules={[
+                {
+                  validator: async (_, value) => {
+                    if (parseReferencePrice(value) === null)
+                      throw new Error(
+                        "参考价为 0-1000000 元，最多保留两位小数",
+                      );
+                  },
+                },
+              ]}
+            >
+              <Input inputMode="decimal" prefix="¥" className="full-width" />
             </Form.Item>
           </div>
           <Form.Item
@@ -769,7 +880,20 @@ function Products() {
               <Switch />
             </Form.Item>
           </Space>
-          <Button block type="primary" htmlType="submit" loading={busy}>
+          <Button
+            block
+            type="primary"
+            htmlType="submit"
+            loading={busy}
+            disabled={
+              busy ||
+              categoriesLoading ||
+              !!categoriesError ||
+              !categories.length ||
+              priceCents === null ||
+              referencePriceCents === null
+            }
+          >
             保存商品
           </Button>
         </Form>
@@ -787,27 +911,31 @@ function Products() {
         <p>当前可售库存：{inventory?.stock} 件。正数入库，负数调减。</p>
         <Form
           form={stockForm}
+          name="admin-inventory"
           layout="vertical"
           onFinish={adjust}
           requiredMark={false}
+          disabled={busy}
         >
           <Form.Item
             name="delta"
             label="变更数量"
             rules={[
-              { required: true, message: "请输入变更数量" },
               {
                 validator: async (_, value) => {
-                  if (!Number.isInteger(value) || value === 0)
-                    throw new Error("请输入非零整数");
+                  if (
+                    parseInventoryDelta(value, inventory?.stock || 0) === null
+                  )
+                    throw new Error(
+                      `请输入 -${inventory?.stock || 0} 到 100000 的非零整数`,
+                    );
                 },
               },
             ]}
           >
-            <InputNumber
-              min={-(inventory?.stock || 0)}
-              max={100000}
-              precision={0}
+            <Input
+              inputMode="text"
+              placeholder="例如：10 或 -2"
               className="full-width"
             />
           </Form.Item>
@@ -820,7 +948,13 @@ function Products() {
           >
             <Input maxLength={200} />
           </Form.Item>
-          <Button block type="primary" htmlType="submit" loading={busy}>
+          <Button
+            block
+            type="primary"
+            htmlType="submit"
+            loading={busy}
+            disabled={busy || inventoryDelta === null}
+          >
             确认调整
           </Button>
         </Form>
@@ -933,7 +1067,12 @@ function AdminOrders() {
         forceRender
       >
         <p>订单：{target?.orderNo}</p>
-        <Form form={form} layout="vertical" onFinish={ship}>
+        <Form
+          name="admin-shipping"
+          form={form}
+          layout="vertical"
+          onFinish={ship}
+        >
           <Form.Item
             name="trackingNo"
             label="物流单号"

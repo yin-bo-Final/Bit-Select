@@ -14,6 +14,7 @@ import {
 import { ProductImage } from "@/components/common";
 import { post, errorText } from "@/lib/api";
 import { useSession } from "@/components/providers";
+import { resolveLoginReturnPath } from "@/lib/login-redirect";
 
 export default function LoginPage() {
   const [mode, setMode] = useState("login");
@@ -31,7 +32,11 @@ export default function LoginPage() {
     try {
       await post(`/auth/${mode}`, values);
       await refresh();
-      router.push("/");
+      router.replace(
+        resolveLoginReturnPath(
+          new URLSearchParams(window.location.search).get("next"),
+        ),
+      );
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -137,7 +142,7 @@ export default function LoginPage() {
               name="nickname"
               label="怎么称呼你"
               rules={[
-                { required: true, message: "请输入昵称" },
+                { required: true, whitespace: true, message: "请输入昵称" },
                 { max: 32, message: "昵称不超过 32 个字符" },
               ]}
             >

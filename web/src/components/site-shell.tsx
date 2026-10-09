@@ -17,6 +17,7 @@ import { useSession } from "./providers";
 import { errorText } from "@/lib/api";
 import { useEffect, useRef } from "react";
 import { AmbientField } from "./ambient-field";
+import { useLoginHref } from "@/lib/use-login-href";
 
 const links = [
   { href: "/", label: "精选好物" },
@@ -25,6 +26,7 @@ const links = [
 ];
 export function SiteShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const loginDestination = useLoginHref();
   const router = useRouter();
   const { user, logout, dark, toggleTheme, effectsEnabled, toggleEffects } =
     useSession();
@@ -146,7 +148,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
               </Dropdown>
             ) : (
               <Link
-                href="/login"
+                href={loginDestination}
                 className="login-link"
                 aria-label="登录 / 注册"
               >
@@ -219,7 +221,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
           </div>
         </footer>
       )}
-      {(path.startsWith("/products/") || path === "/orders") && (
+      {path === "/orders" && (
         <Link href="/assistant" className="assistant-fab">
           <ChatCircleDots size={22} />
           <span>帮我选</span>

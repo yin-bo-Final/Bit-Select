@@ -30,6 +30,12 @@ import {
   ProductImage,
 } from "@/components/common";
 import { useSession } from "@/components/providers";
+import {
+  isPurchaseQuantity,
+  isCartQuantitySynced,
+  parsePurchaseQuantity,
+  validatePhone,
+} from "@/lib/commerce-input";
 
 export default function CartPage() {
   return (
@@ -42,6 +48,16 @@ function Cart() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [totalCents, setTotalCents] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<number, string>>(
+    {},
+  );
+  const [quantityValues, setQuantityValues] = useState<
+    Record<number, number | null>
+  >({});
+  const [quantityErrors, setQuantityErrors] = useState<
+    Record<number, { message: string; quantity: number }>
+  >({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
@@ -49,25 +65,39 @@ function Cart() {
   const addressInitialized = useRef(false);
   const [addressForm] = Form.useForm<Address>();
   const retryKey = useRef({ signature: "", key: "" });
+  const request = useRef<AbortController | null>(null);
+  const mutation = useRef(false);
   const { user, refresh } = useSession();
   const { message } = App.useApp();
   const router = useRouter();
   const load = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    setLoading(true);
     setError("");
     try {
       const result = await api<{ items: CartItem[]; totalCents: number }>(
         "/cart",
+        { signal: controller.signal },
       );
+      if (controller.signal.aborted) return;
       setItems(result.items);
       setTotalCents(result.totalCents);
+      setQuantityDrafts({});
+      setQuantityValues({});
+      setQuantityErrors({});
+      setLoaded(true);
     } catch (e) {
-      setError(errorText(e));
+      if (!controller.signal.aborted) setError(errorText(e));
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted && request.current === controller)
+        setLoading(false);
     }
   }, []);
   useEffect(() => {
     void load();
+    return () => request.current?.abort();
   }, [load]);
   useEffect(() => {
     void refresh();
@@ -99,7 +129,21 @@ function Cart() {
     return () => controller.abort();
   }, [addressForm, hasItems]);
   const update = async (productId: number, quantity: number) => {
+    if (mutation.current || loading) return;
+    const item = items.find((item) => item.productId === productId);
+    if (
+      quantity !== 0 &&
+      (!item?.product.enabled ||
+        !isPurchaseQuantity(quantity, item.product.stock))
+    )
+      return;
+    mutation.current = true;
     setBusy(true);
+    setQuantityErrors((errors) => {
+      const next = { ...errors };
+      delete next[productId];
+      return next;
+    });
     try {
       await api(`/cart/items/${productId}`, {
         method: "PUT",
@@ -107,12 +151,35 @@ function Cart() {
       });
       await load();
     } catch (e) {
+      setQuantityErrors((errors) => ({
+        ...errors,
+        [productId]: { message: errorText(e), quantity },
+      }));
       message.error(errorText(e));
     } finally {
+      mutation.current = false;
       setBusy(false);
     }
   };
   const checkout = async (address: Address) => {
+    if (mutation.current || loading || !loaded || error || !items.length)
+      return;
+    if (
+      items.some(
+        (item) =>
+          !item.product.enabled ||
+          !!quantityErrors[item.productId] ||
+          !isCartQuantitySynced(
+            quantityDrafts[item.productId],
+            item.quantity,
+            item.product.stock,
+          ),
+      )
+    ) {
+      message.error("请先调整商品数量或移除已下架商品");
+      return;
+    }
+    mutation.current = true;
     setBusy(true);
     setError("");
     const payload = {
@@ -120,7 +187,7 @@ function Cart() {
         productId: item.productId,
         quantity: item.quantity,
       })),
-      address,
+      address: { ...address, phone: address.phone.trim() },
     };
     const signature = JSON.stringify(payload);
     if (retryKey.current.signature !== signature)
@@ -134,10 +201,24 @@ function Cart() {
     } catch (e) {
       setError(errorText(e));
     } finally {
+      mutation.current = false;
       setBusy(false);
     }
   };
-  if (loading) return <LoadingState />;
+  if (loading && !loaded) return <LoadingState />;
+  const checkoutBlocked =
+    loading ||
+    !!error ||
+    items.some(
+      (item) =>
+        !item.product.enabled ||
+        !!quantityErrors[item.productId] ||
+        !isCartQuantitySynced(
+          quantityDrafts[item.productId],
+          item.quantity,
+          item.product.stock,
+        ),
+    );
   return (
     <div className="cart-page commerce-page">
       <div className="page-heading">
@@ -156,7 +237,12 @@ function Cart() {
         <p>喜欢的好物，准备带回日常。</p>
       </div>
       {error && <ErrorState error={error} retry={load} />}
-      {!items.length ? (
+      {loading && loaded && (
+        <p className="muted" role="status">
+          正在刷新购物袋…
+        </p>
+      )}
+      {loaded && !items.length && !error ? (
         <div className="empty-area">
           <Empty
             image={<ShoppingBag size={72} weight="thin" />}
@@ -166,7 +252,7 @@ function Cart() {
             去挑些喜欢的
           </Link>
         </div>
-      ) : (
+      ) : items.length > 0 ? (
         <>
           <div className="commerce-checkout-steps" aria-label="购物流程">
             <span className="is-current">
@@ -213,30 +299,141 @@ function Cart() {
                       aria-label={`${item.product.name}数量`}
                       min={1}
                       max={Math.max(1, Math.min(99, item.product.stock))}
-                      value={item.quantity}
-                      disabled={busy}
+                      changeOnBlur={false}
+                      value={
+                        Object.hasOwn(quantityValues, item.productId)
+                          ? quantityValues[item.productId]
+                          : item.quantity
+                      }
+                      status={
+                        quantityDrafts[item.productId] !== undefined &&
+                        parsePurchaseQuantity(
+                          quantityDrafts[item.productId],
+                          item.product.stock,
+                        ) === null
+                          ? "error"
+                          : undefined
+                      }
+                      disabled={
+                        busy ||
+                        loading ||
+                        !item.product.enabled ||
+                        item.product.stock <= 0
+                      }
                       onChange={(value) => {
-                        if (value) void update(item.productId, value);
+                        setQuantityValues((values) => ({
+                          ...values,
+                          [item.productId]: value,
+                        }));
+                        setQuantityDrafts((drafts) => ({
+                          ...drafts,
+                          [item.productId]: value === null ? "" : String(value),
+                        }));
+                      }}
+                      onInput={(input) => {
+                        setQuantityDrafts((drafts) => ({
+                          ...drafts,
+                          [item.productId]: input,
+                        }));
+                        // Editing starts a new intent; a retry must not replay an older quantity.
+                        setQuantityErrors((errors) => {
+                          const next = { ...errors };
+                          delete next[item.productId];
+                          return next;
+                        });
+                      }}
+                      onBlur={() => {
+                        const draft = quantityDrafts[item.productId];
+                        if (draft === undefined) return;
+                        const quantity = parsePurchaseQuantity(
+                          draft,
+                          item.product.stock,
+                        );
+                        if (quantity !== null && quantity !== item.quantity)
+                          void update(item.productId, quantity);
+                      }}
+                      onStep={(value) => {
+                        if (
+                          isPurchaseQuantity(value, item.product.stock) &&
+                          value !== item.quantity
+                        )
+                          void update(item.productId, value);
+                      }}
+                      onKeyDownCapture={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const draft = quantityDrafts[item.productId];
+                          if (draft === undefined) return;
+                          const quantity = parsePurchaseQuantity(
+                            draft,
+                            item.product.stock,
+                          );
+                          if (quantity !== null && quantity !== item.quantity)
+                            void update(item.productId, quantity);
+                        }
                       }}
                     />
                     <Button
                       type="text"
                       aria-label={`移除${item.product.name}`}
                       icon={<Trash size={19} />}
-                      disabled={busy}
+                      disabled={busy || loading}
                       onClick={() => update(item.productId, 0)}
                     />
                   </div>
                   <strong className="cart-subtotal">
                     {money(item.product.priceCents * item.quantity)}
                   </strong>
-                  {item.quantity > item.product.stock && (
+                  {!item.product.enabled ? (
+                    <Alert
+                      type="warning"
+                      title="商品已下架，请移除后再结算"
+                      className="cart-stock-warning"
+                    />
+                  ) : item.product.stock <= 0 ? (
+                    <Alert
+                      type="warning"
+                      title="商品暂时售罄，请移除后再结算"
+                      className="cart-stock-warning"
+                    />
+                  ) : !isPurchaseQuantity(item.quantity, item.product.stock) ? (
                     <Alert
                       type="warning"
                       title="库存不足，请调整数量"
                       className="cart-stock-warning"
                     />
-                  )}
+                  ) : quantityDrafts[item.productId] !== undefined &&
+                    parsePurchaseQuantity(
+                      quantityDrafts[item.productId],
+                      item.product.stock,
+                    ) === null ? (
+                    <Alert
+                      type="warning"
+                      title={`请输入 1–${Math.min(99, item.product.stock)} 的整数数量`}
+                      className="cart-stock-warning"
+                    />
+                  ) : quantityErrors[item.productId] ? (
+                    <Alert
+                      type="error"
+                      title={`${quantityErrors[item.productId].quantity === 0 ? "移除失败" : "数量未能保存"}：${quantityErrors[item.productId].message}`}
+                      className="cart-stock-warning"
+                      action={
+                        <Button
+                          size="small"
+                          disabled={busy || loading}
+                          onClick={() => {
+                            void update(
+                              item.productId,
+                              quantityErrors[item.productId].quantity,
+                            );
+                          }}
+                        >
+                          重试
+                        </Button>
+                      }
+                    />
+                  ) : null}
                 </article>
               ))}
             </section>
@@ -302,6 +499,7 @@ function Cart() {
                 onFinish={checkout}
                 onValuesChange={() => setSelectedAddress(undefined)}
                 requiredMark={false}
+                disabled={busy || loading}
               >
                 <Form.Item
                   name="recipient"
@@ -325,11 +523,12 @@ function Cart() {
                   name="phone"
                   label="联系电话"
                   rules={[
-                    { required: true, message: "请输入联系电话" },
                     {
-                      pattern: /^[+\d\s-]{6,20}$/,
-                      message: "请输入有效的联系电话",
+                      required: true,
+                      whitespace: true,
+                      message: "请输入联系电话",
                     },
+                    { validator: validatePhone },
                   ]}
                 >
                   <Input
@@ -363,9 +562,7 @@ function Cart() {
                   block
                   size="large"
                   loading={busy}
-                  disabled={items.some(
-                    (item) => item.quantity > item.product.stock,
-                  )}
+                  disabled={checkoutBlocked}
                 >
                   提交订单 <ArrowRight size={18} />
                 </Button>
@@ -380,7 +577,7 @@ function Cart() {
             </aside>
           </div>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   App,
@@ -31,14 +31,19 @@ const labels: Record<string, string> = {
 export function RefundRequestButton({
   orderId,
   onSuccess,
+  disabled = false,
 }: {
   orderId: string;
   onSuccess: () => void;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const { message } = App.useApp();
+  const mutation = useRef(false);
   const submit = async (values: { reason: string }) => {
+    if (mutation.current || disabled) return;
+    mutation.current = true;
     setBusy(true);
     try {
       await post(`/orders/${orderId}/refund-request`, values);
@@ -48,12 +53,17 @@ export function RefundRequestButton({
     } catch (e) {
       message.error(errorText(e));
     } finally {
+      mutation.current = false;
       setBusy(false);
     }
   };
   return (
     <>
-      <Button icon={<ArrowUUpLeft size={17} />} onClick={() => setOpen(true)}>
+      <Button
+        icon={<ArrowUUpLeft size={17} />}
+        disabled={disabled || busy}
+        onClick={() => setOpen(true)}
+      >
         申请退货
       </Button>
       <Modal
@@ -69,7 +79,7 @@ export function RefundRequestButton({
         <p className="muted">
           已发货订单需管理员确认商品退回并验收后，余额才会退回钱包。
         </p>
-        <Form layout="vertical" onFinish={submit}>
+        <Form layout="vertical" onFinish={submit} disabled={busy || disabled}>
           <Form.Item
             name="reason"
             label="退货原因"
@@ -98,6 +108,7 @@ export function Refunds({
   const [items, setItems] = useState<RefundRequest[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [review, setReview] = useState<{
     request: RefundRequest;
@@ -105,31 +116,39 @@ export function Refunds({
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const { message } = App.useApp();
+  const request = useRef<AbortController | null>(null);
+  const mutation = useRef(false);
   const load = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
     setLoading(true);
+    setError("");
     try {
-      setItems(
-        (
-          await api<{ items: RefundRequest[] }>(
-            admin ? "/admin/refund-requests" : "/refund-requests",
-          )
-        ).items,
+      const result = await api<{ items: RefundRequest[] }>(
+        admin ? "/admin/refund-requests" : "/refund-requests",
+        { signal: controller.signal },
       );
-      setError("");
+      if (controller.signal.aborted) return;
+      setItems(result.items);
+      setLoaded(true);
     } catch (e) {
-      setError(errorText(e));
+      if (!controller.signal.aborted) setError(errorText(e));
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted && request.current === controller)
+        setLoading(false);
     }
   }, [admin]);
   useEffect(() => {
     void load();
+    return () => request.current?.abort();
   }, [load, revision]);
   const submit = async (values: {
     reason: string;
     goodsReceived?: boolean;
   }) => {
-    if (!review) return;
+    if (!review || mutation.current || loading || error) return;
+    mutation.current = true;
     setBusy(true);
     try {
       await post(
@@ -146,6 +165,7 @@ export function Refunds({
     } catch (e) {
       message.error(errorText(e));
     } finally {
+      mutation.current = false;
       setBusy(false);
     }
   };
@@ -164,8 +184,19 @@ export function Refunds({
           刷新售后
         </Button>
       </div>
-      {error && <Alert type="error" title={error} />}
-      {admin && (
+      {error && (
+        <Alert
+          type="error"
+          title={error}
+          action={<Button onClick={load}>重试</Button>}
+        />
+      )}
+      {admin && !loaded && loading && (
+        <p className="muted" role="status">
+          正在加载售后记录…
+        </p>
+      )}
+      {admin && loaded && (!error || items.length > 0) && (
         <Table<RefundRequest>
           className="commerce-table"
           rowKey="id"
@@ -210,6 +241,7 @@ export function Refunds({
                     <Button
                       size="small"
                       type="primary"
+                      disabled={busy || loading || !!error}
                       onClick={() =>
                         setReview({ request: item, action: "approve" })
                       }
@@ -218,6 +250,7 @@ export function Refunds({
                     </Button>
                     <Button
                       size="small"
+                      disabled={busy || loading || !!error}
                       onClick={() =>
                         setReview({ request: item, action: "reject" })
                       }
@@ -234,9 +267,12 @@ export function Refunds({
       )}
       {!admin && (
         <div className="commerce-refund-list" aria-busy={loading}>
-          {loading ? (
-            <p className="muted">正在加载售后记录…</p>
-          ) : !items.length ? (
+          {loading && (
+            <p className="muted" role="status">
+              {loaded ? "正在刷新售后记录…" : "正在加载售后记录…"}
+            </p>
+          )}
+          {loaded && !items.length && !error ? (
             <Empty
               image={<Receipt size={48} weight="thin" />}
               description="暂无售后申请"
@@ -297,7 +333,12 @@ export function Refunds({
           订单 {review?.request.orderNo}，退款金额{" "}
           {money(review?.request.totalCents)}。
         </p>
-        <Form key={review?.action} layout="vertical" onFinish={submit}>
+        <Form
+          key={review?.action}
+          layout="vertical"
+          onFinish={submit}
+          disabled={busy || loading || !!error}
+        >
           {review?.action === "approve" && (
             <Form.Item
               name="goodsReceived"

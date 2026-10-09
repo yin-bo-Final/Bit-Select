@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   App,
@@ -21,24 +21,43 @@ import {
 } from "@phosphor-icons/react";
 import { api, post, errorText } from "@/lib/api";
 import type { SavedAddress } from "@/lib/types";
+import { validatePhone } from "@/lib/commerce-input";
 
 export function AddressBook() {
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [editing, setEditing] = useState<SavedAddress | "new" | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetchLoading, setFetchLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [removing, setRemoving] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [form] = Form.useForm<SavedAddress>();
   const { message } = App.useApp();
+  const request = useRef<AbortController | null>(null);
+  const mutation = useRef(false);
   const load = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    setFetchLoading(true);
+    setError("");
     try {
-      setAddresses((await api<{ items: SavedAddress[] }>("/addresses")).items);
-      setError("");
+      const result = await api<{ items: SavedAddress[] }>("/addresses", {
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      setAddresses(result.items);
+      setLoaded(true);
     } catch (e) {
-      setError(errorText(e));
+      if (!controller.signal.aborted) setError(errorText(e));
+    } finally {
+      if (!controller.signal.aborted && request.current === controller)
+        setFetchLoading(false);
     }
   }, []);
   useEffect(() => {
     void load();
+    return () => request.current?.abort();
   }, [load]);
   const open = (address: SavedAddress | "new") => {
     form.resetFields();
@@ -46,17 +65,20 @@ export function AddressBook() {
     setEditing(address);
   };
   const save = async (values: SavedAddress) => {
+    if (mutation.current || !editing) return;
+    mutation.current = true;
     setLoading(true);
     try {
       if (editing === "new")
         await post("/addresses", {
           ...values,
+          phone: values.phone.trim(),
           isDefault: values.isDefault || false,
         });
       else if (editing)
         await api(`/addresses/${editing.id}`, {
           method: "PUT",
-          body: JSON.stringify(values),
+          body: JSON.stringify({ ...values, phone: values.phone.trim() }),
         });
       message.success("地址已保存");
       setEditing(null);
@@ -64,15 +86,22 @@ export function AddressBook() {
     } catch (e) {
       message.error(errorText(e));
     } finally {
+      mutation.current = false;
       setLoading(false);
     }
   };
   const remove = async (id: number) => {
+    if (mutation.current) return;
+    mutation.current = true;
+    setRemoving(id);
     try {
       await api(`/addresses/${id}`, { method: "DELETE" });
       await load();
     } catch (e) {
       message.error(errorText(e));
+    } finally {
+      mutation.current = false;
+      setRemoving(null);
     }
   };
   return (
@@ -88,7 +117,14 @@ export function AddressBook() {
         <Button
           icon={<Plus size={17} />}
           onClick={() => open("new")}
-          disabled={addresses.length >= 20}
+          disabled={
+            addresses.length >= 20 ||
+            fetchLoading ||
+            loading ||
+            removing !== null ||
+            !loaded ||
+            !!error
+          }
         >
           添加地址
         </Button>
@@ -100,8 +136,13 @@ export function AddressBook() {
           action={<Button onClick={load}>重试</Button>}
         />
       )}
-      <div className="address-grid">
-        {!addresses.length ? (
+      {fetchLoading && (
+        <p className="muted" role="status">
+          {loaded ? "正在刷新收货地址…" : "正在加载收货地址…"}
+        </p>
+      )}
+      <div className="address-grid" aria-busy={fetchLoading}>
+        {loaded && !addresses.length && !error ? (
           <Empty
             image={<House size={48} weight="thin" />}
             description="添加常用地址，让下次购买更方便"
@@ -128,6 +169,7 @@ export function AddressBook() {
                   type="text"
                   size="small"
                   icon={<PencilSimple size={16} />}
+                  disabled={fetchLoading || loading || removing !== null}
                   onClick={() => open(address)}
                 >
                   编辑
@@ -138,7 +180,13 @@ export function AddressBook() {
                   cancelText="保留"
                   onConfirm={() => remove(address.id)}
                 >
-                  <Button type="text" size="small" icon={<Trash size={16} />}>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<Trash size={16} />}
+                    disabled={fetchLoading || loading || removing !== null}
+                    loading={removing === address.id}
+                  >
                     删除
                   </Button>
                 </Popconfirm>
@@ -162,6 +210,7 @@ export function AddressBook() {
           layout="vertical"
           onFinish={save}
           requiredMark={false}
+          disabled={loading}
         >
           <Form.Item
             name="recipient"
@@ -177,8 +226,8 @@ export function AddressBook() {
             name="phone"
             label="联系电话"
             rules={[
-              { required: true, message: "请输入联系电话" },
-              { pattern: /^[+\d\s-]{6,20}$/, message: "请输入有效的联系电话" },
+              { required: true, whitespace: true, message: "请输入联系电话" },
+              { validator: validatePhone },
             ]}
           >
             <Input autoComplete="tel" maxLength={20} />
