@@ -30,7 +30,7 @@
   padding-inline: 9px;
   background: var(--subtle);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font: 500 14px var(--font-mono, monospace);
   letter-spacing: 0;
 }
@@ -131,7 +131,7 @@
 .commerce-auth a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 /* Login: a product-led introduction beside a quiet, focused form. */
@@ -144,7 +144,7 @@
   margin: 20px auto 48px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 24px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -215,7 +215,7 @@
   overflow: hidden;
   background: var(--canvas);
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: var(--radius-sm);
 }
 .commerce-auth-product-main {
   width: 73%;
@@ -254,7 +254,7 @@
   align-self: center;
   padding: 48px;
   background: transparent;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   border: 0;
   box-shadow: none;
 }
@@ -265,7 +265,7 @@
   place-items: center;
   color: var(--accent);
   background: var(--accent-soft);
-  border-radius: 14px;
+  border-radius: var(--radius-sm);
   margin-bottom: 24px;
 }
 .commerce-auth .auth-panel h2 {
@@ -320,7 +320,7 @@
   place-items: center;
   background: var(--accent-soft);
   color: var(--accent);
-  border-radius: 18px;
+  border-radius: var(--radius-sm);
 }
 .commerce-page .account-overview {
   display: grid;
@@ -347,7 +347,7 @@
   left: 0;
   width: 3px;
   background: var(--accent);
-  border-radius: 0 3px 3px 0;
+  border-radius: var(--radius-sm);
 }
 .commerce-wallet-label {
   display: flex;
@@ -362,7 +362,7 @@
 .commerce-currency {
   margin-left: auto;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   padding: 3px 7px;
   font: 11px var(--font-mono, monospace);
   color: var(--muted);
@@ -414,7 +414,7 @@
   place-items: center;
   background: var(--subtle);
   color: var(--muted);
-  border-radius: 11px;
+  border-radius: var(--radius-sm);
 }
 .commerce-page .account-links strong {
   display: block;
@@ -468,6 +468,10 @@
   flex-wrap: wrap;
   gap: 8px 12px;
   font-size: 13px;
+}
+.commerce-addresses .address-card > div > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .commerce-address-marker {
   display: inline-flex;
@@ -656,7 +660,7 @@
   flex-wrap: wrap;
   gap: 7px;
   background: var(--subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 12px;
   font-size: 11px;
   margin: 17px 0 25px;
@@ -726,7 +730,7 @@
 }
 .commerce-page .order-header .ant-tag {
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   padding: 2px 9px;
 }
@@ -803,7 +807,7 @@
   align-items: flex-start;
   gap: 10px;
   padding: 16px;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: var(--canvas);
   margin-bottom: 18px;
   font-size: 12px;
@@ -975,7 +979,7 @@
   .commerce-avatar {
     width: 52px;
     height: 52px;
-    border-radius: 14px;
+    border-radius: var(--radius-sm);
   }
   .commerce-account-heading {
     gap: 12px;
@@ -991,7 +995,7 @@
     max-width: 520px;
     margin-top: 4px;
     min-height: auto;
-    border-radius: 18px;
+    border-radius: var(--radius-sm);
   }
   .commerce-auth .auth-intro {
     padding: 24px;

@@ -233,6 +233,8 @@ export default function Home() {
             <div className="pagination">
               <span>共 {data.total} 件好物</span>
               <Pagination
+                responsive
+                showLessItems
                 current={page}
                 pageSize={12}
                 total={data.total}

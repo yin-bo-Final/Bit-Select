@@ -45,6 +45,8 @@ function Cart() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<number>();
+  const addressInitialized = useRef(false);
   const [addressForm] = Form.useForm<Address>();
   const retryKey = useRef({ signature: "", key: "" });
   const { user, refresh } = useSession();
@@ -70,21 +72,32 @@ function Cart() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  const hasItems = items.length > 0;
   useEffect(() => {
-    if (!items.length) return;
-    void api<{ items: SavedAddress[] }>("/addresses")
+    if (!hasItems) return;
+    const controller = new AbortController();
+    void api<{ items: SavedAddress[] }>("/addresses", {
+      signal: controller.signal,
+    })
       .then((result) => {
+        if (controller.signal.aborted) return;
         setAddresses(result.items);
+        if (addressInitialized.current) return;
+        addressInitialized.current = true;
+        if (addressForm.isFieldsTouched()) return;
         const address = result.items.find((item) => item.isDefault);
-        if (address)
+        if (address) {
+          setSelectedAddress(address.id);
           addressForm.setFieldsValue({
             recipient: address.recipient,
             phone: address.phone,
             detail: address.detail,
           });
+        }
       })
       .catch(() => {});
-  }, [addressForm, items.length]);
+    return () => controller.abort();
+  }, [addressForm, hasItems]);
   const update = async (productId: number, quantity: number) => {
     setBusy(true);
     try {
@@ -257,6 +270,7 @@ function Cart() {
                   <label htmlFor="saved-address">使用常用地址</label>
                   <Select
                     id="saved-address"
+                    value={selectedAddress}
                     className="full-width"
                     placeholder="选择已保存的收货地址"
                     options={addresses.map((item) => ({
@@ -264,6 +278,7 @@ function Cart() {
                       label: `${item.recipient} · ${item.detail}`,
                     }))}
                     onChange={(id) => {
+                      setSelectedAddress(id);
                       const address = addresses.find((item) => item.id === id);
                       if (address)
                         addressForm.setFieldsValue({
@@ -279,6 +294,7 @@ function Cart() {
                 form={addressForm}
                 layout="vertical"
                 onFinish={checkout}
+                onValuesChange={() => setSelectedAddress(undefined)}
                 requiredMark={false}
               >
                 <Form.Item

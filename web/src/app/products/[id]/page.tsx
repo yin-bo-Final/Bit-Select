@@ -38,12 +38,21 @@ export default function ProductDetail({
   const { message } = App.useApp();
   const router = useRouter();
   useEffect(() => {
+    const controller = new AbortController();
     setError("");
-    void api<Product>(`/products/${id}`)
-      .then(setProduct)
-      .catch((e) => setError(errorText(e)));
+    setProduct(null);
+    setQuantity(1);
+    void api<Product>(`/products/${id}`, { signal: controller.signal })
+      .then((result) => {
+        if (!controller.signal.aborted) setProduct(result);
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(errorText(e));
+      });
+    return () => controller.abort();
   }, [id, revision]);
   const addToCart = async (checkout: boolean) => {
+    if (!product || product.id !== Number(id) || busy) return;
     if (!user) {
       router.push("/login");
       return;
@@ -69,7 +78,7 @@ export default function ProductDetail({
         retry={() => setRevision((value) => value + 1)}
       />
     );
-  if (!product) return <LoadingState />;
+  if (!product || product.id !== Number(id)) return <LoadingState />;
   return (
     <div className="product-detail-page bs-detail-page">
       <Breadcrumb
@@ -87,7 +96,14 @@ export default function ProductDetail({
           <p className="bs-detail-category">
             {product.categoryName || product.category}
           </p>
-          <h1 id="product-title">{product.name}</h1>
+          <h1 id="product-title">
+            {product.name.split(" · ").map((part, index) => (
+              <span className="bs-product-name-part" key={`${index}-${part}`}>
+                {index > 0 ? " · " : ""}
+                {part}
+              </span>
+            ))}
+          </h1>
           <p className="bs-detail-description">{product.description}</p>
           <div className="bs-detail-tags">
             {product.tags?.map((tag) => (

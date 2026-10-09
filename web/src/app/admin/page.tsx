@@ -226,28 +226,38 @@ function Admin() {
   );
 }
 function usePaged<T>(path: string, query = "") {
+  const request = useRef<AbortController | null>(null);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<PageResult<T>>({ items: [], total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const resource = useRef({ path, page, query });
   const load = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
     setLoading(true);
     try {
-      setData(
-        await api(
-          `${path}?page=${page}&pageSize=10&q=${encodeURIComponent(query)}`,
-        ),
+      const current = resource.current;
+      const result = await api<PageResult<T>>(
+        `${current.path}?page=${current.page}&pageSize=10&q=${encodeURIComponent(current.query)}`,
+        { signal: controller.signal },
       );
+      if (controller.signal.aborted) return;
+      setData(result);
       setError("");
     } catch (e) {
-      setError(errorText(e));
+      if (!controller.signal.aborted) setError(errorText(e));
     } finally {
-      setLoading(false);
+      if (request.current === controller && !controller.signal.aborted)
+        setLoading(false);
     }
-  }, [path, page, query]);
+  }, []);
   useEffect(() => {
+    resource.current = { path, page, query };
     void load();
-  }, [load]);
+    return () => request.current?.abort();
+  }, [load, path, page, query]);
   return {
     data,
     loading,
@@ -260,6 +270,8 @@ function usePaged<T>(path: string, query = "") {
       total: data.total,
       onChange: setPage,
       showSizeChanger: false,
+      responsive: true,
+      showLessItems: true,
     },
   };
 }

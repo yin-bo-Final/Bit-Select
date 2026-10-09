@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { api, post } from "@/lib/api";
@@ -33,17 +34,31 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [dark, setDark] = useState(false);
   const [themeReady, setThemeReady] = useState(false);
+  const sessionRevision = useRef(0);
+  const sessionRequest = useRef<AbortController | null>(null);
   const refresh = useCallback(async () => {
+    const revision = ++sessionRevision.current;
+    sessionRequest.current?.abort();
+    const controller = new AbortController();
+    sessionRequest.current = controller;
     try {
-      setUser(await api<User>("/auth/me"));
+      const result = await api<User>("/auth/me", { signal: controller.signal });
+      if (revision === sessionRevision.current) setUser(result);
     } catch {
-      setUser(null);
+      if (revision === sessionRevision.current) setUser(null);
     } finally {
-      setLoading(false);
+      if (revision === sessionRevision.current) {
+        sessionRequest.current = null;
+        setLoading(false);
+      }
     }
   }, []);
   useEffect(() => {
     void refresh();
+    return () => {
+      ++sessionRevision.current;
+      sessionRequest.current?.abort();
+    };
   }, [refresh]);
   useEffect(() => {
     let preference: string | null = null;
@@ -75,8 +90,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
       return !value;
     });
   const logout = async () => {
+    ++sessionRevision.current;
+    sessionRequest.current?.abort();
     await post("/auth/logout");
+    ++sessionRevision.current;
+    sessionRequest.current?.abort();
     setUser(null);
+    setLoading(false);
   };
   return (
     <ConfigProvider
@@ -85,7 +105,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
           colorPrimary: dark ? "#709cff" : "#245bdb",
-          borderRadius: 10,
+          borderRadius: 0,
           fontFamily:
             'var(--font-display), "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif',
           fontSize: 14,

@@ -168,7 +168,12 @@ export function Refunds({
         dataSource={items}
         loading={loading}
         scroll={{ x: 850 }}
-        pagination={{ pageSize: 10, hideOnSinglePage: true }}
+        pagination={{
+          defaultPageSize: 10,
+          hideOnSinglePage: true,
+          responsive: true,
+          showLessItems: true,
+        }}
         locale={{ emptyText: <Empty description="暂无售后申请" /> }}
         columns={[
           {

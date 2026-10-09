@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Alert, App, Button, Empty, Pagination, Tag } from "antd";
 import {
@@ -76,8 +76,10 @@ export default function OrdersPage() {
   );
 }
 function Orders() {
+  const request = useRef<AbortController | null>(null);
   const [data, setData] = useState<PageResult<Order>>({ items: [], total: 0 });
   const [page, setPage] = useState(1);
+  const currentPage = useRef(page);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -85,18 +87,29 @@ function Orders() {
   const { modal, message } = App.useApp();
   const { refresh } = useSession();
   const load = useCallback(async () => {
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
+    setLoading(true);
     setError("");
     try {
-      setData(await api<PageResult<Order>>(`/orders?page=${page}&pageSize=10`));
+      const result = await api<PageResult<Order>>(
+        `/orders?page=${currentPage.current}&pageSize=10`,
+        { signal: controller.signal },
+      );
+      if (!controller.signal.aborted) setData(result);
     } catch (e) {
-      setError(errorText(e));
+      if (!controller.signal.aborted) setError(errorText(e));
     } finally {
-      setLoading(false);
+      if (request.current === controller && !controller.signal.aborted)
+        setLoading(false);
     }
-  }, [page]);
+  }, []);
   useEffect(() => {
+    currentPage.current = page;
     void load();
-  }, [load]);
+    return () => request.current?.abort();
+  }, [load, page]);
   const action = (
     order: Order,
     item: { action: string; label: string; confirm: string },
@@ -274,6 +287,8 @@ function Orders() {
           </div>
           <div className="pagination">
             <Pagination
+              responsive
+              showLessItems
               current={page}
               pageSize={10}
               total={data.total}
