@@ -410,17 +410,27 @@
   font-size: 11px;
   margin-bottom: 8px;
 }
-.precision-assistant .chat-composer .ant-input {
+.precision-assistant .chat-composer .composer-input {
   background: transparent;
-  border: 0;
+  /* Transparent block borders keep scrolling text out of the safe inset. */
+  border: solid transparent;
+  border-width: 6px 0;
+  /* Only the outer composer is curved; rounding this viewport clips text. */
+  border-radius: 0;
   box-shadow: none;
-  padding: 1px 0;
+  padding: 0;
   resize: none;
   color: var(--text);
   font-size: 14px;
   line-height: 1.75;
+  /* Autosize rounds scrollHeight; cap by actual line height at fractional zoom. */
+  max-height: calc(4lh + 12px) !important;
+  transition: none;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
 }
-.precision-assistant .chat-composer .ant-input::placeholder {
+.precision-assistant .chat-composer .composer-input::placeholder {
   color: var(--muted);
 }
 .composer-toolbar,
@@ -546,7 +556,7 @@
     padding: 15px 20px 12px;
     border-radius: 30px;
   }
-  .precision-assistant .chat-composer .ant-input {
+  .precision-assistant .chat-composer .composer-input {
     font-size: 16px;
   }
 }
