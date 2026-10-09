@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Alert, Button, Empty, InputNumber, Select, Table, Tag } from "antd";
+import { Alert, Button, Empty, Input, Select, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   ArrowRight,
@@ -12,6 +12,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { useOperationsPolling } from "@/lib/operations-polling";
+import { parseUserId } from "@/lib/admin-input";
 import type {
   OperationsPage,
   OperationsRequest,
@@ -28,10 +29,18 @@ import {
 
 export default function OperationsConversationsPage() {
   const [status, setStatus] = useState("all");
-  const [userFilter, setUserFilter] = useState<number | null>(null);
+  const [userFilter, setUserFilter] = useState("");
   const [userId, setUserId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
+  const parsedUserFilter = parseUserId(userFilter);
+  const invalidUserFilter = userFilter !== "" && parsedUserFilter === null;
+  const applyUserFilter = () => {
+    if (invalidUserFilter) return;
+    setUserId(parsedUserFilter);
+    setPage(1);
+    setSelected(null);
+  };
   const query = new URLSearchParams({
     page: String(page),
     pageSize: "10",
@@ -129,21 +138,21 @@ export default function OperationsConversationsPage() {
               { value: "cancelled", label: "已停止" },
             ]}
           />
-          <InputNumber
+          <Input
             aria-label="按用户ID筛选请求"
+            aria-invalid={invalidUserFilter}
+            aria-describedby={
+              invalidUserFilter ? "user-filter-error" : undefined
+            }
             placeholder="用户 ID"
             value={userFilter}
-            min={1}
-            precision={0}
-            onChange={setUserFilter}
+            inputMode="numeric"
+            style={{ width: 160 }}
+            status={invalidUserFilter ? "error" : undefined}
+            onChange={(event) => setUserFilter(event.target.value)}
+            onPressEnter={applyUserFilter}
           />
-          <Button
-            onClick={() => {
-              setUserId(userFilter);
-              setPage(1);
-              setSelected(null);
-            }}
-          >
+          <Button onClick={applyUserFilter} disabled={invalidUserFilter}>
             筛选
           </Button>
           {userId !== null && (
@@ -151,7 +160,7 @@ export default function OperationsConversationsPage() {
               type="text"
               onClick={() => {
                 setUserId(null);
-                setUserFilter(null);
+                setUserFilter("");
                 setPage(1);
                 setSelected(null);
               }}
@@ -162,6 +171,16 @@ export default function OperationsConversationsPage() {
         </OperationsRefresh>
       }
     >
+      {invalidUserFilter && (
+        <Alert
+          id="user-filter-error"
+          className="operations-error"
+          type="warning"
+          showIcon
+          title="用户 ID 必须为 1-9007199254740991 的整数"
+          description="保留原始输入，修正后再筛选；留空可以查看全部用户。"
+        />
+      )}
       <div className="operations-trace-layout">
         <section
           className="operations-panel operations-request-list"

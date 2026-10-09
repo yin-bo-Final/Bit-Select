@@ -80,8 +80,10 @@ function Orders() {
   const request = useRef<AbortController | null>(null);
   const [data, setData] = useState<PageResult<Order>>({ items: [], total: 0 });
   const [page, setPage] = useState(1);
+  const [displayedPage, setDisplayedPage] = useState(1);
   const currentPage = useRef(page);
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [refundRevision, setRefundRevision] = useState(0);
@@ -93,12 +95,17 @@ function Orders() {
     request.current = controller;
     setLoading(true);
     setError("");
+    const requestedPage = currentPage.current;
     try {
       const result = await api<PageResult<Order>>(
-        `/orders?page=${currentPage.current}&pageSize=10`,
+        `/orders?page=${requestedPage}&pageSize=10`,
         { signal: controller.signal },
       );
-      if (!controller.signal.aborted) setData(result);
+      if (!controller.signal.aborted) {
+        setData(result);
+        setDisplayedPage(requestedPage);
+        setLoaded(true);
+      }
     } catch (e) {
       if (!controller.signal.aborted) setError(errorText(e));
     } finally {
@@ -111,11 +118,12 @@ function Orders() {
     void load();
     return () => request.current?.abort();
   }, [load, page]);
-  const action = (
+  const action = async (
     order: Order,
     item: { action: string; label: string; confirm: string },
   ) =>
-    modal.confirm({
+    // Awaited hook modals keep failed actions open without an unhandled rejection.
+    await modal.confirm({
       title: item.confirm,
       content:
         item.action === "pay"
@@ -143,7 +151,7 @@ function Orders() {
         <div>
           <h1>
             我的订单
-            {!loading && (
+            {loaded && !loading && (
               <span className="commerce-heading-count">{data.total}</span>
             )}
           </h1>
@@ -154,9 +162,14 @@ function Orders() {
         </Button>
       </div>
       {error && <ErrorState error={error} retry={load} />}{" "}
-      {loading ? (
+      {loading && loaded && (
+        <p className="muted" role="status">
+          正在刷新订单…
+        </p>
+      )}
+      {loading && !loaded ? (
         <LoadingState />
-      ) : !data.items.length ? (
+      ) : loaded && !data.items.length && !error ? (
         <div className="empty-area">
           <Empty
             image={<Package size={72} weight="thin" />}
@@ -166,7 +179,7 @@ function Orders() {
             浏览商品
           </Link>
         </div>
-      ) : (
+      ) : data.items.length > 0 ? (
         <>
           <div className="order-list">
             {data.items.map((order) => (
@@ -271,6 +284,7 @@ function Orders() {
                     {["SHIPPED", "COMPLETED"].includes(order.status) && (
                       <RefundRequestButton
                         orderId={order.id}
+                        disabled={loading || !!error || busy !== null}
                         onSuccess={() =>
                           setRefundRevision((value) => value + 1)
                         }
@@ -285,6 +299,7 @@ function Orders() {
                             : "default"
                         }
                         loading={busy === order.id}
+                        disabled={loading || !!error || busy !== null}
                         onClick={() => action(order, item)}
                       >
                         {item.label}
@@ -299,15 +314,18 @@ function Orders() {
             <Pagination
               responsive
               showLessItems
-              current={page}
+              current={displayedPage}
               pageSize={10}
               total={data.total}
               showSizeChanger={false}
-              onChange={setPage}
+              onChange={(next) => {
+                if (next === page) void load();
+                else setPage(next);
+              }}
             />
           </div>
         </>
-      )}
+      ) : null}
       <Refunds revision={refundRevision} />
     </div>
   );

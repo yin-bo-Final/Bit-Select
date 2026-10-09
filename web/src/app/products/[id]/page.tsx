@@ -23,6 +23,8 @@ import type { Product } from "@/lib/types";
 import { ErrorState, LoadingState } from "@/components/common";
 import { ProductStage } from "@/components/product-stage";
 import { useSession } from "@/components/providers";
+import { parsePurchaseQuantity } from "@/lib/commerce-input";
+import { loginHref } from "@/lib/login-redirect";
 
 export default function ProductDetail({
   params,
@@ -32,7 +34,8 @@ export default function ProductDetail({
   const { id } = use(params);
   const [product, setProduct] = useState<Product | null>(null);
   const [error, setError] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState<number | null>(1);
+  const [quantityInput, setQuantityInput] = useState("1");
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   const { user } = useSession();
@@ -43,6 +46,7 @@ export default function ProductDetail({
     setError("");
     setProduct(null);
     setQuantity(1);
+    setQuantityInput("1");
     void api<Product>(`/products/${id}`, { signal: controller.signal })
       .then((result) => {
         if (!controller.signal.aborted) setProduct(result);
@@ -54,15 +58,23 @@ export default function ProductDetail({
   }, [id, revision]);
   const addToCart = async (checkout: boolean) => {
     if (!product || product.id !== Number(id) || busy) return;
+    const purchaseQuantity = parsePurchaseQuantity(
+      quantityInput,
+      product.stock,
+    );
+    if (!product.enabled || purchaseQuantity === null) {
+      message.error("请填写库存范围内的整数数量");
+      return;
+    }
     if (!user) {
-      router.push("/login");
+      router.push(loginHref(`/products/${product.id}`));
       return;
     }
     setBusy(true);
     try {
       await api(`/cart/items/${id}`, {
         method: "PUT",
-        body: JSON.stringify({ quantity }),
+        body: JSON.stringify({ quantity: purchaseQuantity }),
       });
       if (checkout) router.push("/cart");
       else message.success("已更新购物袋");
@@ -80,6 +92,9 @@ export default function ProductDetail({
       />
     );
   if (!product || product.id !== Number(id)) return <LoadingState />;
+  const quantityValid =
+    parsePurchaseQuantity(quantityInput, product.stock) !== null;
+  const unavailable = !product.enabled || product.stock <= 0;
   return (
     <div className="product-detail-page bs-detail-page">
       <Breadcrumb
@@ -124,7 +139,11 @@ export default function ProductDetail({
                 )}
             </div>
             <p className="bs-stock-note">
-              {product.stock > 0 ? `现货 ${product.stock} 件` : "商品暂时售罄"}{" "}
+              {!product.enabled
+                ? "商品已下架"
+                : product.stock > 0
+                  ? `现货 ${product.stock} 件`
+                  : "商品暂时售罄"}{" "}
               · 平台余额支付
             </p>
             <div className="bs-quantity-control">
@@ -132,17 +151,34 @@ export default function ProductDetail({
               <InputNumber
                 id="quantity"
                 min={1}
-                max={Math.min(99, product.stock)}
+                max={Math.max(1, Math.min(99, product.stock))}
+                changeOnBlur={false}
                 value={quantity}
-                onChange={(value) => setQuantity(value || 1)}
-                disabled={!product.stock}
+                onChange={(value) => {
+                  setQuantity(value);
+                  setQuantityInput(value === null ? "" : String(value));
+                }}
+                onInput={setQuantityInput}
+                onKeyDownCapture={(event) => {
+                  if (event.key === "Enter" && !quantityValid) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }
+                }}
+                status={!unavailable && !quantityValid ? "error" : undefined}
+                disabled={unavailable || busy}
               />
             </div>
+            {!unavailable && !quantityValid && (
+              <p className="form-note" role="status">
+                请输入 1–{Math.min(99, product.stock)} 的整数数量。
+              </p>
+            )}
             <div className="bs-purchase-actions">
               <Button
                 type="primary"
                 size="large"
-                disabled={!product.stock}
+                disabled={unavailable || !quantityValid}
                 loading={busy}
                 onClick={() => addToCart(true)}
               >
@@ -151,7 +187,7 @@ export default function ProductDetail({
               <Button
                 size="large"
                 icon={<ShoppingBag size={19} />}
-                disabled={!product.stock}
+                disabled={unavailable || !quantityValid}
                 loading={busy}
                 onClick={() => addToCart(false)}
               >

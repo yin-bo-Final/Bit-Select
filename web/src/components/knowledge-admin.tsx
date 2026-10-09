@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Alert, App, Button, Skeleton, Statistic, Table, Tag } from "antd";
 import {
@@ -12,7 +12,8 @@ import {
   Stack,
   WarningCircle,
 } from "@phosphor-icons/react";
-import { api, post, date, errorText } from "@/lib/api";
+import { post, date, errorText } from "@/lib/api";
+import { useOperationsPolling } from "@/lib/operations-polling";
 type KnowledgeDocument = {
   id: string;
   productId: number;
@@ -30,39 +31,23 @@ const labels: Record<string, string> = {
   PENDING: "等待处理",
 };
 export function KnowledgeAdmin() {
-  const [data, setData] = useState<KnowledgeStatus>({
+  const state = useOperationsPolling<KnowledgeStatus>("/ai/knowledge", 5000);
+  const data = state.data || {
     running: false,
     documents: [],
-  });
-  const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  };
+  const loading = state.loading || state.refreshing;
+  const loaded = state.data !== null;
+  const error = state.error;
+  const load = state.refresh;
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const { message, modal } = App.useApp();
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setData(await api<KnowledgeStatus>("/ai/knowledge"));
-      setLoaded(true);
-      setError("");
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
   useEffect(() => {
-    void load();
-  }, [load]);
-  useEffect(() => {
-    if (!data.running) return;
-    const timer = setInterval(() => {
-      void load();
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [data.running, load]);
-  const reindex = () =>
-    modal.confirm({
+    state.setAutoRefresh(data.running);
+  }, [data.running, state.setAutoRefresh]);
+  const reindex = async () =>
+    // Keep a failed submission open for retry without a global promise rejection.
+    await modal.confirm({
       title: "重新同步商品说明书？",
       content:
         "系统会解析说明书、重新切块并更新知识库。处理过程中可继续查看已有商品与订单。",
@@ -77,7 +62,7 @@ export function KnowledgeAdmin() {
           message.success(
             result.started ? "知识库同步已启动" : "已有同步任务正在执行",
           );
-          await load();
+          load();
         } catch (e) {
           message.error(errorText(e));
           throw e;
@@ -116,14 +101,25 @@ export function KnowledgeAdmin() {
             type="primary"
             onClick={reindex}
             loading={busy}
-            disabled={data.running}
+            disabled={data.running || loading || !loaded || !!error}
           >
             同步知识库
           </Button>
         </div>
       </div>
       {error && (
-        <Alert type="error" showIcon title={error} className="form-alert" />
+        <Alert
+          type="error"
+          showIcon
+          title="知识库状态读取失败"
+          description={error}
+          action={
+            <Button onClick={load} loading={loading}>
+              重新读取
+            </Button>
+          }
+          className="form-alert"
+        />
       )}
       {data.running && (
         <Alert
@@ -182,8 +178,12 @@ export function KnowledgeAdmin() {
             </div>
             {loaded ? (
               <Statistic value={value} />
-            ) : (
+            ) : loading ? (
               <Skeleton.Input active size="small" />
+            ) : (
+              <span className="muted" aria-label="尚未读取到数据">
+                —
+              </span>
             )}
           </div>
         ))}
@@ -202,7 +202,9 @@ export function KnowledgeAdmin() {
         locale={{
           emptyText: loaded
             ? "还没有商品资料。点击同步知识库，导入说明书。"
-            : "正在读取知识库状态",
+            : loading
+              ? "正在读取知识库状态"
+              : "知识库状态暂不可用，请重新读取。",
         }}
         columns={[
           {

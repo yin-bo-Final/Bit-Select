@@ -338,7 +338,8 @@ function Assistant() {
             items.map((item) => (item.id === id ? update(item) : item)),
           );
       };
-      updateDraft("");
+      // Retrying a reply must preserve the next question being prepared.
+      if (text === undefined) updateDraft("");
       setBusy(true);
       setAnnouncement("问题已发送，正在连接导购");
       setError("");

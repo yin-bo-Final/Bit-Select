@@ -7,6 +7,7 @@ import { useSession } from "./providers";
 import { money } from "@/lib/api";
 import type { Product } from "@/lib/types";
 import { ArrowUpRight, ShoppingBag } from "@phosphor-icons/react";
+import { useLoginHref } from "@/lib/use-login-href";
 
 export function ErrorState({
   error,
@@ -35,6 +36,7 @@ export function LoadingState() {
 }
 export function LoginGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useSession();
+  const loginDestination = useLoginHref();
   if (loading) return <LoadingState />;
   if (!user)
     return (
@@ -44,7 +46,7 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
         </div>
         <h1>登录后即可继续</h1>
         <p>你的购物袋、订单与专属导购，都在这里。</p>
-        <Link href="/login" className="navigation-button">
+        <Link href={loginDestination} className="navigation-button">
           登录 / 注册
         </Link>
       </div>
