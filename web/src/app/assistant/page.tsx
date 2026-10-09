@@ -897,13 +897,14 @@ function Assistant() {
             </label>
             <Input.TextArea
               id="bit-assistant-input"
+              className="composer-input"
               ref={inputRef}
               aria-label="发送给导购的问题"
               aria-describedby="stream-input-hint"
               value={input}
               onChange={(event) => updateDraft(event.target.value)}
               placeholder="告诉我你想选什么，或说说你的使用习惯…"
-              autoSize={{ minRows: 2, maxRows: 5 }}
+              autoSize={{ minRows: 2, maxRows: 4 }}
               maxLength={8000}
               onKeyDown={(event) => {
                 if (
