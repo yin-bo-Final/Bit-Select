@@ -6,7 +6,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.bitselect.contracts.SessionService;
+import com.bitselect.contracts.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import jakarta.servlet.AsyncEvent;
@@ -32,6 +32,8 @@ class AiControllerStreamTest {
   CountDownLatch deltaReceived;
   AiController controller;
   StringRedisTemplate redis;
+  SessionService sessions;
+  ValueOperations<String, String> values;
   MockMvc mvc;
 
   @BeforeEach
@@ -50,13 +52,14 @@ class AiControllerStreamTest {
             "embed",
             "rerank",
             20);
-    var sessions = mock(SessionService.class);
+    sessions = mock(SessionService.class);
     when(sessions.requireUserId(any())).thenReturn(7L);
     var store = mock(ConversationStore.class);
     when(store.ensure(eq(7L), any(), anyString())).thenReturn("owned-conversation");
     redis = mock(StringRedisTemplate.class);
     @SuppressWarnings("unchecked")
-    ValueOperations<String, String> values = mock(ValueOperations.class);
+    ValueOperations<String, String> mockedValues = mock(ValueOperations.class);
+    values = mockedValues;
     when(redis.opsForValue()).thenReturn(values);
     when(values.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
     var workflow = mock(AiWorkflow.class);
@@ -83,7 +86,7 @@ class AiControllerStreamTest {
             redis,
             model,
             traces);
-    mvc = MockMvcBuilders.standaloneSetup(controller).build();
+    mvc = MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new ApiErrors()).build();
   }
 
   @AfterEach
@@ -209,5 +212,53 @@ class AiControllerStreamTest {
     assertTrue(body.contains("\"code\":\"AI_TIMEOUT\""));
     assertFalse(body.contains("event:done"));
     assertResourcesReleased();
+  }
+
+  @Test
+  void streamOnlyAcceptStillReceivesJsonForUnauthenticatedRequest() throws Exception {
+    when(sessions.requireUserId(any())).thenThrow(new ApiException(401, "UNAUTHORIZED", "请先登录"));
+    mvc.perform(
+            post("/api/ai/chat")
+                .contentType("application/json")
+                .accept("text/event-stream")
+                .content("{\"message\":\"hello\"}"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(content().contentTypeCompatibleWith("application/json"))
+        .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    verifyNoInteractions(values);
+  }
+
+  @Test
+  void streamOnlyAcceptReceivesJsonConflictWhilePreviousWorkerOwnsConversation() throws Exception {
+    when(values.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(false);
+    mvc.perform(
+            post("/api/ai/chat")
+                .contentType("application/json")
+                .accept("text/event-stream")
+                .content("{\"message\":\"hello\"}"))
+        .andExpect(status().isConflict())
+        .andExpect(content().contentTypeCompatibleWith("application/json"))
+        .andExpect(jsonPath("$.code").value("CONVERSATION_BUSY"));
+    assertEquals(
+        3, ((Semaphore) ReflectionTestUtils.getField(controller, "capacity")).availablePermits());
+  }
+
+  @Test
+  void streamOnlyAcceptReceivesJsonWhenCapacityIsBusy() throws Exception {
+    var capacity = (Semaphore) ReflectionTestUtils.getField(controller, "capacity");
+    assertTrue(capacity.tryAcquire(3));
+    try {
+      mvc.perform(
+              post("/api/ai/chat")
+                  .contentType("application/json")
+                  .accept("text/event-stream")
+                  .content("{\"message\":\"hello\"}"))
+          .andExpect(status().isTooManyRequests())
+          .andExpect(content().contentTypeCompatibleWith("application/json"))
+          .andExpect(jsonPath("$.code").value("AI_BUSY"));
+      verifyNoInteractions(values);
+    } finally {
+      capacity.release(3);
+    }
   }
 }

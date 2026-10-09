@@ -39,6 +39,11 @@ import {
 import { api, date, errorText } from "@/lib/api";
 import { readEvents } from "@/lib/sse";
 import {
+  cancelChatRequest,
+  openChatStream,
+  type ActiveChatRequest,
+} from "@/lib/chat-request";
+import {
   createChatScrollFollow,
   chatScrollKeyDirection,
 } from "@/lib/chat-scroll-follow";
@@ -78,6 +83,7 @@ function Assistant() {
   const hasMessages = messages.length > 0;
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState("");
   const [memoryOpen, setMemoryOpen] = useState(false);
@@ -90,10 +96,7 @@ function Assistant() {
   const [announcement, setAnnouncement] = useState("");
   const [showLatest, setShowLatest] = useState(false);
   const [stats, setStats] = useState<ConversationStats | null>(null);
-  const activeRequest = useRef<{
-    id: string;
-    controller: AbortController;
-  } | null>(null);
+  const activeRequest = useRef<ActiveChatRequest | null>(null);
   const historyRequest = useRef<AbortController | null>(null);
   const memoryRequest = useRef<AbortController | null>(null);
   const memoryRevision = useRef(0);
@@ -321,7 +324,7 @@ function Assistant() {
       }
       const id = crypto.randomUUID();
       const controller = new AbortController();
-      const request = { id, controller };
+      const request: ActiveChatRequest = { id, controller };
       activeRequest.current = request;
       const revision = ++viewRevision.current;
       let currentConversationId = activeConversation.current;
@@ -359,23 +362,12 @@ function Assistant() {
       let finished = false;
       let retryable = true;
       try {
-        const response = await fetch("/api/ai/chat", {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "text/event-stream",
-          },
-          body: JSON.stringify({
-            conversationId: currentConversationId,
-            message: value,
-          }),
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          const body = await response.json().catch(() => null);
-          throw new Error(body?.message || "导购暂时无法回答，请稍后重试。");
-        }
+        const response = await openChatStream(
+          currentConversationId,
+          value,
+          controller.signal,
+          () => setAnnouncement("正在等待上一轮回答结束，随后重新回答"),
+        );
         if (
           !response.headers
             .get("Content-Type")
@@ -408,6 +400,8 @@ function Assistant() {
             event.event === "meta" &&
             typeof body.conversationId === "string"
           ) {
+            if (typeof body.requestId === "string")
+              request.serverRequestId = body.requestId;
             setConversationId(body.conversationId);
             activeConversation.current = body.conversationId;
             currentConversationId = body.conversationId;
@@ -489,10 +483,14 @@ function Assistant() {
               : "本次回答未完成，请查看回复下方的提示",
         );
       } finally {
+        if (request.cancellation) {
+          await request.cancellation;
+        }
         if (activeRequest.current === request) {
           activeRequest.current = null;
           if (mounted.current) {
             setBusy(false);
+            setStopping(false);
             void loadConversations();
             if (finished && currentConversationId) {
               const completedId = currentConversationId;
@@ -517,7 +515,16 @@ function Assistant() {
   );
   const stopResponse = () => {
     const request = activeRequest.current;
-    if (!request) return;
+    if (!request || request.controller.signal.aborted) return;
+    setStopping(true);
+    setAnnouncement("正在停止本轮回答，等待后台完成清理");
+    if (request.serverRequestId)
+      request.cancellation = cancelChatRequest(request.serverRequestId).catch(
+        (failure) => {
+          if (mounted.current && activeRequest.current === request)
+            setError(errorText(failure));
+        },
+      );
     request.controller.abort();
     setMessages((items) =>
       items.map((item) =>
@@ -594,7 +601,9 @@ function Assistant() {
               <h1>比特导购</h1>
               <p>
                 {busy
-                  ? "正在为你整理选购信息…"
+                  ? stopping
+                    ? "正在停止上一轮回答…"
+                    : "正在为你整理选购信息…"
                   : "把预算、场景与商品资料放在一起考虑。"}
               </p>
             </div>
@@ -910,7 +919,9 @@ function Assistant() {
               <span id="stream-input-hint" className="composer-context">
                 <BookOpenText size={15} />
                 {busy
-                  ? "回答中，也可以准备下一条问题"
+                  ? stopping
+                    ? "正在停止，完成后可以重新回答"
+                    : "回答中，也可以准备下一条问题"
                   : "预算、场景、偏好，都可以聊"}
               </span>
               <div className="composer-send-actions">
@@ -925,7 +936,9 @@ function Assistant() {
                 {busy ? (
                   <Button
                     type="primary"
-                    aria-label="停止生成"
+                    aria-label={stopping ? "正在停止生成" : "停止生成"}
+                    loading={stopping}
+                    disabled={stopping}
                     icon={<Stop size={19} weight="fill" />}
                     onClick={stopResponse}
                   />

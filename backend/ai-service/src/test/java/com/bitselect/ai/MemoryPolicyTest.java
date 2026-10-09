@@ -55,7 +55,7 @@ class MemoryPolicyTest {
   }
 
   @Test
-  void disablingMemorySkipsEveryModelAndVectorCall() throws Exception {
+  void disablingMemorySkipsEveryRemoteModelAndVectorCall() throws Exception {
     JdbcTemplate db = mock(JdbcTemplate.class);
     SiliconFlowClient model = mock(SiliconFlowClient.class);
     MilvusStore vectors = mock(MilvusStore.class);
@@ -74,7 +74,9 @@ class MemoryPolicyTest {
             true);
     try {
       assertTrue(service.recall(7, "我的预算是多少").isEmpty());
-      verifyNoInteractions(model, vectors);
+      verify(model, atLeastOnce()).checkRequest();
+      verifyNoMoreInteractions(model);
+      verifyNoInteractions(vectors);
     } finally {
       service.shutdown();
     }
