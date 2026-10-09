@@ -70,7 +70,7 @@ public class ProductRepository {
           default -> "p.featured DESC,p.id";
         };
     a.add(pageSize);
-    a.add((page - 1) * pageSize);
+    a.add((long) (page - 1) * pageSize);
     return Map.of(
         "items",
         db.query(

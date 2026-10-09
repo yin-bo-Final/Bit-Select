@@ -85,7 +85,8 @@ public class AiController {
         new ChatStream(
             control,
             Duration.ofSeconds(Math.max(1, requestTimeoutSeconds)),
-            Duration.ofSeconds(Math.max(1, heartbeatSeconds)), requestTrace);
+            Duration.ofSeconds(Math.max(1, heartbeatSeconds)),
+            requestTrace);
     Thread.startVirtualThread(
         () -> {
           try {
@@ -94,7 +95,7 @@ public class AiController {
             metadata.put("conversationId", conversation);
             metadata.put("requestId", requestTrace.id());
             stream.send("meta", metadata);
-            workflow.run(user, conversation, body.message(), stream::send);
+            workflow.run(user, conversation, body.message(), stream::send, stream::persist);
             stream.succeed(conversation);
           } catch (Exception e) {
             stream.fail("AI_FAILED", "暂时无法完成回答，请重试；未完成的回答不会写入会话。");

@@ -6,6 +6,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.*;
 import java.util.*;
@@ -16,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TradeService {
+  private static final String REFUND_SELECT =
+      "SELECT r.*,o.order_no,o.total_cents FROM refund_requests r JOIN orders o ON o.id=r.order_id";
   private final JdbcTemplate db;
   private final ProductLookup catalog;
 
@@ -376,7 +380,7 @@ public class TradeService {
     long count = db.queryForObject("SELECT COUNT(*) FROM orders" + where, Long.class, args);
     List<Object> a = new ArrayList<>(Arrays.asList(args));
     a.add(pageSize);
-    a.add((page - 1) * pageSize);
+    a.add(((long) page - 1) * pageSize);
     var ids =
         db.query(
             "SELECT id FROM orders" + where + " ORDER BY created_at DESC LIMIT ? OFFSET ?",
@@ -414,13 +418,22 @@ public class TradeService {
         db.queryForList("SELECT id,status FROM refund_requests WHERE order_id=?", orderId);
     if (!existing.isEmpty()) {
       String id = (String) existing.getFirst().get("id");
-      if ("REJECTED".equals(existing.getFirst().get("status")))
+      if ("REJECTED".equals(existing.getFirst().get("status"))) {
+        String previousId = id;
+        id = UUID.randomUUID().toString();
         db.update(
             "UPDATE refund_requests SET"
-                + " status='REQUESTED',reason=?,review_reason=NULL,reviewer_id=NULL,reviewed_at=NULL"
+                + " id=?,status='REQUESTED',reason=?,created_at=CURRENT_TIMESTAMP,review_reason=NULL,reviewer_id=NULL,reviewed_at=NULL"
                 + " WHERE id=?",
+            id,
             reason,
-            id);
+            previousId);
+        // A new submission has a new identity; delayed reviews of the rejected request must fail.
+        outbox(
+            "RefundRequested",
+            orderId,
+            Map.of("userId", user, "refundRequestId", id, "previousRequestId", previousId));
+      }
       return refundRecord(id);
     }
     String id = UUID.randomUUID().toString();
@@ -435,37 +448,41 @@ public class TradeService {
   }
 
   public Map<String, Object> refunds(long user, boolean admin) {
-    var ids =
+    // A resubmission changes the request ID; fetch complete rows in one statement snapshot.
+    return Map.of(
+        "items",
         db.query(
-            "SELECT id FROM refund_requests"
-                + (admin ? "" : " WHERE user_id=?")
-                + " ORDER BY created_at DESC LIMIT 100",
-            (r, n) -> r.getString(1),
-            admin ? new Object[] {} : new Object[] {user});
-    return Map.of("items", ids.stream().map(this::refundRecord).toList());
+            REFUND_SELECT
+                + (admin ? "" : " WHERE r.user_id=?")
+                + " ORDER BY r.created_at DESC,r.id LIMIT 100",
+            this::mapRefund,
+            admin ? new Object[] {} : new Object[] {user}));
   }
 
   private Map<String, Object> refundRecord(String id) {
+    return refundRecord(id, false);
+  }
+
+  private Map<String, Object> refundRecord(String id, boolean locking) {
     var rows =
         db.query(
-            "SELECT r.*,o.order_no,o.total_cents FROM refund_requests r JOIN orders o ON"
-                + " o.id=r.order_id WHERE r.id=?",
-            (r, n) -> {
-              Map<String, Object> m = new LinkedHashMap<>();
-              m.put("id", r.getString("id"));
-              m.put("orderId", r.getString("order_id"));
-              m.put("orderNo", r.getString("order_no"));
-              m.put("userId", r.getLong("user_id"));
-              m.put("totalCents", r.getLong("total_cents"));
-              m.put("reason", r.getString("reason"));
-              m.put("status", r.getString("status"));
-              m.put("reviewReason", r.getString("review_reason"));
-              m.put("createdAt", r.getTimestamp("created_at").toInstant());
-              return m;
-            },
-            id);
+            REFUND_SELECT + " WHERE r.id=?" + (locking ? " FOR UPDATE" : ""), this::mapRefund, id);
     if (rows.isEmpty()) throw ApiException.missing();
     return rows.getFirst();
+  }
+
+  private Map<String, Object> mapRefund(ResultSet row, int index) throws SQLException {
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("id", row.getString("id"));
+    result.put("orderId", row.getString("order_id"));
+    result.put("orderNo", row.getString("order_no"));
+    result.put("userId", row.getLong("user_id"));
+    result.put("totalCents", row.getLong("total_cents"));
+    result.put("reason", row.getString("reason"));
+    result.put("status", row.getString("status"));
+    result.put("reviewReason", row.getString("review_reason"));
+    result.put("createdAt", row.getTimestamp("created_at").toInstant());
+    return result;
   }
 
   @Transactional
@@ -475,10 +492,13 @@ public class TradeService {
     long user = ((Number) request.get("userId")).longValue();
     String orderId = (String) request.get("orderId");
     var order = locked(user, orderId);
-    var current =
-        db.queryForMap("SELECT status FROM refund_requests WHERE id=? FOR UPDATE", requestId);
+    var states =
+        db.queryForList("SELECT status FROM refund_requests WHERE id=? FOR UPDATE", requestId);
+    // The user may have resubmitted while this reviewer waited for the user/order locks.
+    if (states.isEmpty()) throw ApiException.missing();
+    var current = states.getFirst();
     String target = approve ? "COMPLETED" : "REJECTED";
-    if (target.equals(current.get("status"))) return refundRecord(requestId);
+    if (target.equals(current.get("status"))) return refundRecord(requestId, true);
     if (!"REQUESTED".equals(current.get("status")))
       throw new ApiException(409, "INVALID_REFUND_STATE", "售后申请已处理");
     if (approve) {
@@ -508,6 +528,6 @@ public class TradeService {
         reason,
         admin,
         requestId);
-    return refundRecord(requestId);
+    return refundRecord(requestId, true);
   }
 }

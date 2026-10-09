@@ -48,6 +48,26 @@ public class AiWorkflow {
   public String run(
       long user, String conversation, String question, BiConsumer<String, Object> send)
       throws Exception {
+    return run(user, conversation, question, send, PersistenceAction::run);
+  }
+
+  @FunctionalInterface
+  public interface PersistenceAction {
+    void run() throws Exception;
+  }
+
+  @FunctionalInterface
+  public interface PersistenceBoundary {
+    void save(PersistenceAction action) throws Exception;
+  }
+
+  public String run(
+      long user,
+      String conversation,
+      String question,
+      BiConsumer<String, Object> send,
+      PersistenceBoundary persistence)
+      throws Exception {
     var control = model.currentRequestControl();
     Map<String, KeyStrategy> strategies = new HashMap<>();
     for (String key : List.of("query", "intent", "evidence", "sources", "memories"))
@@ -225,7 +245,7 @@ public class AiWorkflow {
     phase(send, "compose", "completed", "回答已生成");
     phase(send, "save", "running", "保存会话");
     model.checkRequest();
-    store.save(user, conversation, question, answer, sources);
+    persistence.save(() -> store.save(user, conversation, question, answer, sources));
     phase(send, "save", "completed", "会话已保存");
     return answer;
   }

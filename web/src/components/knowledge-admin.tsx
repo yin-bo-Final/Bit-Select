@@ -175,7 +175,12 @@ export function KnowledgeAdmin() {
       <Table<KnowledgeDocument>
         rowKey="id"
         dataSource={data.documents}
-        pagination={{ pageSize: 10, showSizeChanger: true }}
+        pagination={{
+          defaultPageSize: 10,
+          showSizeChanger: true,
+          responsive: true,
+          showLessItems: true,
+        }}
         loading={loading && !data.documents.length}
         scroll={{ x: 900 }}
         locale={{

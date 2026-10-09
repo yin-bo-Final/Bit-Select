@@ -162,6 +162,9 @@ public class KnowledgeService {
                   id,
                   "documentId",
                   id));
+        // The document is PROCESSING and therefore hidden from retrieval until SQL commits.
+        // Replace its projection completely: upsert alone leaves old tail chunks after shrinking.
+        vectors.delete(COLLECTION, "documentId == " + id);
         vectors.upsert(COLLECTION, records);
         tx.executeWithoutResult(
             status -> {

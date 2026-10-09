@@ -95,6 +95,8 @@ function Assistant() {
     controller: AbortController;
   } | null>(null);
   const historyRequest = useRef<AbortController | null>(null);
+  const memoryRequest = useRef<AbortController | null>(null);
+  const memoryRevision = useRef(0);
   const mounted = useRef(true);
   const viewRevision = useRef(0);
   const historyRevision = useRef(0);
@@ -136,6 +138,7 @@ function Assistant() {
       mounted.current = false;
       activeRequest.current?.controller.abort();
       historyRequest.current?.abort();
+      memoryRequest.current?.abort();
     };
   }, [loadConversations, updateDraft]);
   const keepLatestVisible = useCallback(() => {
@@ -248,24 +251,42 @@ function Assistant() {
     inputRef.current?.focus();
   };
   const loadMemories = async () => {
+    const revision = ++memoryRevision.current;
+    memoryRequest.current?.abort();
+    const controller = new AbortController();
+    memoryRequest.current = controller;
     setMemoryOpen(true);
     setMemoryLoading(true);
     setMemoryError("");
     try {
       const result = await api<{ items: Memory[]; enabled?: boolean }>(
         "/ai/memories",
+        { signal: controller.signal },
       );
+      if (!mounted.current || revision !== memoryRevision.current) return;
       setMemories(result.items);
       setMemoryEnabled(result.enabled !== false);
     } catch (e) {
-      setMemoryError(errorText(e));
+      if (mounted.current && revision === memoryRevision.current)
+        setMemoryError(errorText(e));
     } finally {
-      setMemoryLoading(false);
+      if (mounted.current && revision === memoryRevision.current) {
+        memoryRequest.current = null;
+        setMemoryLoading(false);
+      }
     }
   };
+  const invalidateMemoryRead = () => {
+    ++memoryRevision.current;
+    memoryRequest.current?.abort();
+    memoryRequest.current = null;
+    setMemoryLoading(false);
+  };
   const forget = async (id: string) => {
+    invalidateMemoryRead();
     try {
       await api(`/ai/memories/${id}`, { method: "DELETE" });
+      invalidateMemoryRead();
       setMemories((list) => list.filter((item) => item.id !== id));
       toast.success("已删除这条记忆");
     } catch (e) {
@@ -273,12 +294,15 @@ function Assistant() {
     }
   };
   const changeMemoryPreference = async (enabled: boolean) => {
+    if (memorySaving) return;
+    invalidateMemoryRead();
     setMemorySaving(true);
     try {
       await api("/ai/memory-preference", {
         method: "PUT",
         body: JSON.stringify({ enabled }),
       });
+      invalidateMemoryRead();
       setMemoryEnabled(enabled);
       toast.success(enabled ? "已开启个人记忆" : "已关闭个人记忆");
     } catch (e) {

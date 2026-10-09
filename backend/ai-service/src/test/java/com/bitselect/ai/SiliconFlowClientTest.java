@@ -73,6 +73,26 @@ class SiliconFlowClientTest {
   }
 
   @Test
+  void blankCompletionCannotSilentlyReplaceConversationSummary() {
+    handler(
+        "{\"choices\":[{\"message\":{\"content\":\"   \"},\"finish_reason\":\"stop\"}]}", false);
+    var error =
+        assertThrows(IllegalStateException.class, () -> client(5).complete(messages(), 1200));
+    assertEquals("MODEL_EMPTY_RESPONSE", error.getMessage());
+  }
+
+  @Test
+  void truncatedCompletionCannotBeAcceptedAsACompleteSummary() {
+    handler(
+        "{\"choices\":[{\"message\":{\"content\":\"unfinished"
+            + " summary\"},\"finish_reason\":\"length\"}]}",
+        false);
+    var error =
+        assertThrows(IllegalStateException.class, () -> client(5).complete(messages(), 1200));
+    assertEquals("MODEL_RESPONSE_LIMIT", error.getMessage());
+  }
+
+  @Test
   void incompleteStreamIsRejectedInsteadOfPersisted() {
     handler(token(), false);
     assertThrows(IllegalStateException.class, () -> client(5).stream(messages(), s -> {}));

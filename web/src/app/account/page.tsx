@@ -139,7 +139,12 @@ function Account() {
             className="commerce-table"
             rowKey="id"
             dataSource={wallet.ledger}
-            pagination={{ pageSize: 10, hideOnSinglePage: true }}
+            pagination={{
+              defaultPageSize: 10,
+              hideOnSinglePage: true,
+              responsive: true,
+              showLessItems: true,
+            }}
             locale={{ emptyText: <Empty description="还没有余额记录" /> }}
             scroll={{ x: 650 }}
             columns={[

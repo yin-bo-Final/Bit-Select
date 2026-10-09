@@ -3,13 +3,18 @@ package com.bitselect.gateway;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.*;
+import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.*;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Component
 public class BoundaryFilter implements WebFilter, Ordered {
+  private static final long MAX_BODY_BYTES = 20L * 1024 * 1024;
   private final Set<String> blocked;
   private final Set<String> origins;
 
@@ -58,20 +63,55 @@ public class BoundaryFilter implements WebFilter, Ordered {
       return e.getResponse().setComplete();
     }
     long size = e.getRequest().getHeaders().getContentLength();
-    if (size > 20 * 1024 * 1024) return fail(e, HttpStatus.PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE");
-    return chain.filter(
-        e.mutate()
-            .request(
-                e.getRequest()
-                    .mutate()
-                    .headers(
-                        h -> {
-                          h.remove("X-User-Id");
-                          h.remove("X-User-Role");
-                        })
-                    .build())
-            .build());
+    if (size > MAX_BODY_BYTES) return fail(e, HttpStatus.PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE");
+    var request =
+        new ServerHttpRequestDecorator(
+            e.getRequest()
+                .mutate()
+                .headers(
+                    h -> {
+                      h.remove("X-User-Id");
+                      h.remove("X-User-Role");
+                    })
+                .build()) {
+          @Override
+          public Flux<DataBuffer> getBody() {
+            // Count actual bytes, including chunked requests; never collect the body in memory.
+            return Flux.defer(
+                () -> {
+                  long[] received = {0};
+                  return super.getBody()
+                      .<DataBuffer>handle(
+                          (buffer, sink) -> {
+                            received[0] += buffer.readableByteCount();
+                            if (received[0] > MAX_BODY_BYTES) {
+                              DataBufferUtils.release(buffer);
+                              sink.error(new BodyLimitExceededException());
+                            } else sink.next(buffer);
+                          })
+                      .doOnDiscard(DataBuffer.class, DataBufferUtils::release);
+                });
+          }
+        };
+    return chain
+        .filter(e.mutate().request(request).build())
+        .onErrorResume(
+            BoundaryFilter::bodyLimitExceeded,
+            error -> {
+              if (e.getResponse().isCommitted()) return Mono.error(error);
+              return fail(e, HttpStatus.PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE");
+            });
   }
+
+  private static boolean bodyLimitExceeded(Throwable error) {
+    // The HTTP proxy may wrap a request-publisher failure in a transport exception.
+    for (int depth = 0; error != null && depth < 16; depth++, error = error.getCause()) {
+      if (error instanceof BodyLimitExceededException) return true;
+    }
+    return false;
+  }
+
+  private static final class BodyLimitExceededException extends RuntimeException {}
 
   private Mono<Void> fail(ServerWebExchange e, HttpStatus status, String code) {
     e.getResponse().setStatusCode(status);

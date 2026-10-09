@@ -282,7 +282,7 @@
 .source-count {
   padding: 1px 6px;
   background: var(--accent-soft);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   font: 11px var(--font-mono);
   color: var(--accent);
 }
@@ -572,6 +572,9 @@
   flex-shrink: 0;
 }
 .precision-admin .admin-stats .ant-statistic-content {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
   font-family: var(--font-mono);
   color: var(--text);
   font-size: clamp(22px, 2.2vw, 30px);
@@ -679,7 +682,7 @@
 }
 .precision-admin .ant-table-cell .ant-tag {
   font-size: 11px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
 }
 .admin-product-cell {
   display: flex;
@@ -693,7 +696,7 @@
   height: 48px;
   background: var(--subtle);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -850,7 +853,7 @@
     grid-column: span 2;
   }
 }
-@media (max-width: 768px) {
+@media (max-width: 800px) {
   .precision-assistant {
     grid-template-columns: minmax(0, 1fr);
     height: calc(
@@ -1032,9 +1035,13 @@
     width: 100%;
     justify-content: space-between;
     flex-direction: row-reverse;
+    flex-wrap: wrap;
+    gap: 10px;
   }
   .overview-refresh > span {
     display: block;
+    flex-basis: 100%;
+    order: 1;
     font-size: 10px;
   }
   .precision-admin .admin-stats {

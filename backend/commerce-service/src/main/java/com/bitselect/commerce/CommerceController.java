@@ -184,7 +184,7 @@ public class CommerceController {
             "%" + q + "%",
             "%" + q + "%",
             pageSize,
-            (page - 1) * pageSize);
+            ((long) page - 1) * pageSize);
     long total =
         db.queryForObject(
             "SELECT COUNT(*) FROM users WHERE username LIKE ? OR nickname LIKE ?",

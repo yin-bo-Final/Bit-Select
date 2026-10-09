@@ -46,5 +46,9 @@ class CatalogSearchTest {
     assertEquals(9900, found.getFirst().priceCents());
     assertEquals("耳机", ProductSearchTerm.normalize("通勤蓝牙耳机"));
     assertTrue(new CatalogProvider(db).searchProducts("耳机", 5000, 10).isEmpty());
+    var beyondCatalog =
+        new ProductRepository(db).list(Integer.MAX_VALUE, 100, null, null, null, false);
+    assertEquals(3L, beyondCatalog.get("total"));
+    assertTrue(((java.util.List<?>) beyondCatalog.get("items")).isEmpty());
   }
 }

@@ -7,12 +7,14 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.*;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.datasource.*;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
@@ -190,6 +192,20 @@ class TradeServiceTest {
   }
 
   @Test
+  void veryLargePageNumbersDoNotOverflowIntoNegativeSqlOffsets() {
+    create(1, 1, "page-boundary");
+    assertEquals(List.of(), trade.list(1, false, Integer.MAX_VALUE, 100).get("items"));
+    db.update("UPDATE users SET role='ADMIN' WHERE id=1");
+    var sessions = org.mockito.Mockito.mock(SessionService.class);
+    var request = new org.springframework.mock.web.MockHttpServletRequest();
+    org.mockito.Mockito.when(sessions.requireUserId(request)).thenReturn(1L);
+    var controller = new CommerceController(trade, sessions, new Users(db), db);
+    var users = (Map<?, ?>) controller.userList(request, "", Integer.MAX_VALUE, 100);
+    assertEquals(List.of(), users.get("items"));
+    assertEquals(2L, users.get("total"));
+  }
+
+  @Test
   void shippingLocksOutCancellationAndRefund() {
     String id = create(1, 1, "ship");
     trade.pay(1, id);
@@ -302,12 +318,81 @@ class TradeServiceTest {
     assertEquals(
         "REJECTED",
         ((Map<?, ?>) ((List<?>) trade.refunds(1, false).get("items")).getFirst()).get("status"));
-    trade.requestRefund(1, id, "已寄回");
+    request = (String) trade.requestRefund(1, id, "已寄回").get("id");
     trade.reviewRefund(2, request, true, "已验收入库");
     trade.reviewRefund(2, request, true, "重复提交");
     assertEquals(10000, value("SELECT balance_cents FROM users WHERE id=1"));
     assertEquals(10, value("SELECT stock FROM inventory WHERE product_id=1"));
     assertEquals("REFUNDED", trade.get(1, id, false).get("status"));
     assertEquals(1, value("SELECT COUNT(*) FROM wallet_ledger WHERE type='REFUND'"));
+  }
+
+  @Test
+  void resubmissionInvalidatesOldReviewRequestsWithoutChangingMoneyOrInventory() {
+    String order = create(1, 2, "new-return-generation");
+    trade.pay(1, order);
+    trade.ship(order, "SF-RETURN-NEW");
+    String original = (String) trade.requestRefund(1, order, "首次申请").get("id");
+    trade.reviewRefund(2, original, false, "请补充退货资料");
+    String resubmitted = (String) trade.requestRefund(1, order, "已寄回，请重新验收").get("id");
+    assertNotEquals(original, resubmitted);
+    assertEquals(resubmitted, trade.requestRefund(1, order, "重复提交").get("id"));
+    for (boolean approve : List.of(false, true)) {
+      ApiException failure =
+          assertThrows(
+              ApiException.class, () -> trade.reviewRefund(2, original, approve, "延迟的旧审核请求"));
+      assertEquals(404, failure.status);
+    }
+    var current = (Map<?, ?>) ((List<?>) trade.refunds(1, false).get("items")).getFirst();
+    assertEquals("REQUESTED", current.get("status"));
+    assertEquals("已寄回，请重新验收", current.get("reason"));
+    assertEquals(8000, value("SELECT balance_cents FROM users WHERE id=1"));
+    assertEquals(8, value("SELECT stock FROM inventory WHERE product_id=1"));
+    assertEquals(2, value("SELECT COUNT(*) FROM event_outbox WHERE event_type='RefundRequested'"));
+    trade.reviewRefund(2, resubmitted, true, "新申请已验收");
+    assertEquals("REFUNDED", trade.get(1, order, false).get("status"));
+    assertEquals(10000, value("SELECT balance_cents FROM users WHERE id=1"));
+    assertEquals(1, value("SELECT COUNT(*) FROM wallet_ledger WHERE type='REFUND'"));
+  }
+
+  @Test
+  void refundListKeepsSingleSnapshotWhenRejectedRequestIsResubmitted() {
+    String order = create(1, 2, "return-list-snapshot");
+    trade.pay(1, order);
+    trade.ship(order, "RETURN-LIST-ONE");
+    String original = (String) trade.requestRefund(1, order, "首次退货申请").get("id");
+    trade.reviewRefund(2, original, false, "请补充退货资料");
+    String otherOrder = create(2, 1, "other-user-return");
+    trade.pay(2, otherOrder);
+    trade.ship(otherOrder, "RETURN-LIST-TWO");
+    trade.requestRefund(2, otherOrder, "其他用户的退货申请");
+
+    var reads = new AtomicInteger();
+    String[] replacement = new String[1];
+    var interleavingDb =
+        new JdbcTemplate(Objects.requireNonNull(db.getDataSource())) {
+          @Override
+          public <T> List<T> query(String sql, RowMapper<T> mapper, Object... args) {
+            var result = super.query(sql, mapper, args);
+            if (sql.contains("FROM refund_requests") && reads.incrementAndGet() == 1) {
+              // Commit a new application after the first read, before the list can read again.
+              replacement[0] = (String) trade.requestRefund(1, order, "已补充资料，重新申请").get("id");
+            }
+            return result;
+          }
+        };
+    var reader = new TradeService(interleavingDb, ids -> List.of());
+    var items = (List<?>) reader.refunds(1, false).get("items");
+
+    assertNotEquals(original, replacement[0]);
+    assertEquals(0, value("SELECT COUNT(*) FROM refund_requests WHERE id=?", original));
+    assertEquals(1, reads.get(), "Read each refund and its order metadata in one SQL snapshot");
+    assertEquals(1, items.size(), "Another user's return must stay private");
+    var snapshot = (Map<?, ?>) items.getFirst();
+    assertEquals(original, snapshot.get("id"));
+    assertEquals("REJECTED", snapshot.get("status"));
+    assertEquals("请补充退货资料", snapshot.get("reviewReason"));
+    assertEquals(2000L, snapshot.get("totalCents"));
+    assertEquals(order, snapshot.get("orderId"));
   }
 }
