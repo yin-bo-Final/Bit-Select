@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { App, Button, Dropdown } from "antd";
+import { App, Button, Dropdown, Tooltip } from "antd";
 import {
   ChatCircleDots,
   ShoppingBag,
@@ -10,10 +10,13 @@ import {
   UserCircle,
   List,
   ArrowUpRight,
+  Pause,
+  Play,
 } from "@phosphor-icons/react";
 import { useSession } from "./providers";
 import { errorText } from "@/lib/api";
 import { useEffect, useRef } from "react";
+import { AmbientField } from "./ambient-field";
 
 const links = [
   { href: "/", label: "精选好物" },
@@ -23,11 +26,16 @@ const links = [
 export function SiteShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
-  const { user, logout, dark, toggleTheme } = useSession();
+  const { user, logout, dark, toggleTheme, effectsEnabled, toggleEffects } =
+    useSession();
   const { message } = App.useApp();
   const contentRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (
+      !effectsEnabled ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      return;
     const animation = contentRef.current?.animate(
       [
         { opacity: 0.65, transform: "translateY(8px)" },
@@ -36,9 +44,10 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
       { duration: 320, easing: "cubic-bezier(.22,1,.36,1)" },
     );
     return () => animation?.cancel();
-  }, [path]);
+  }, [path, effectsEnabled]);
   return (
-    <>
+    <div className="site-frame">
+      <AmbientField />
       <a href="#main-content" className="skip-link">
         跳至主要内容
       </a>
@@ -46,9 +55,12 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
         用心挑选，让日常更好一点。<span>电子科技 / 居家生活</span>
       </div>
       <header className="site-header">
-        <div className="page-reading-progress" aria-hidden="true" />
         <div className="header-inner">
-          <Link href="/" className="brand" aria-label="比特严选首页">
+          <Link
+            href="/"
+            className="brand"
+            aria-label="b. 比特严选 BIT SELECT 首页"
+          >
             <span className="brand-mark">b.</span>
             <span>
               比特严选<small>BIT SELECT</small>
@@ -66,6 +78,17 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
           <div className="header-actions">
+            <Tooltip title={effectsEnabled ? "暂停背景动效" : "开启背景动效"}>
+              <Button
+                className="effects-toggle"
+                type="text"
+                shape="circle"
+                aria-label={effectsEnabled ? "暂停背景动效" : "开启背景动效"}
+                aria-pressed={effectsEnabled}
+                icon={effectsEnabled ? <Pause size={18} /> : <Play size={18} />}
+                onClick={toggleEffects}
+              />
+            </Tooltip>
             <Button
               type="text"
               shape="circle"
@@ -196,12 +219,12 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
           </div>
         </footer>
       )}
-      {path !== "/assistant" && path !== "/" && (
+      {(path.startsWith("/products/") || path === "/orders") && (
         <Link href="/assistant" className="assistant-fab">
           <ChatCircleDots size={22} />
           <span>帮我选</span>
         </Link>
       )}
-    </>
+    </div>
   );
 }

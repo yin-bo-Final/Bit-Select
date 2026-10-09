@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="400" viewBox="0 0 512 400" role="img">
 <title>无线充电座 · 舒适 026：原创商品概念图</title>
 <desc>根据商品名称绘制的原创矢量示意，展示基本形态；并非真实商品照片。</desc>
-<rect width="512" height="400" fill="#edf0f2"/>
 <ellipse cx="256" cy="329" rx="124" ry="11" fill="#dce2e7"/>
 <defs>
       <linearGradient id="pe697a0e7babfe58585e794b5e5baa7-2-body" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a3b0bc"/><stop offset=".55" stop-color="#8193a3"/><stop offset="1" stop-color="#677682"/></linearGradient>
@@ -9,5 +8,4 @@
       <pattern id="pe697a0e7babfe58585e794b5e5baa7-2-fabric" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 1h5M1 0v5" stroke="#edf1f4" stroke-opacity=".13" stroke-width=".65"/></pattern>
       <pattern id="pe697a0e7babfe58585e794b5e5baa7-2-holes" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="1.35" fill="#26313c" fill-opacity=".45"/></pattern>
     </defs><g transform="translate(256 200) scale(0.990 0.984) translate(-256 -200)"><ellipse cx="256" cy="241" rx="136" ry="65" fill="#677682" /><rect x="120" y="219" width="272" height="23" rx="3" fill="#677682" /><ellipse cx="256" cy="217" rx="136" ry="65" fill="url(#pe697a0e7babfe58585e794b5e5baa7-2-body)" /><ellipse cx="256" cy="215" rx="108" ry="47" fill="none" stroke="#a3b0bc" stroke-width="2"/><path d="M265 188l-29 32h22l-10 23 30-32h-22Z" fill="#dfe6eb" /><path d="M371 249q31 7 44-14" fill="none" stroke="#667583" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /><rect x="242" y="278" width="27" height="3" rx="1" fill="#dbe4e9" /></g>
-<text x="256" y="374" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="11" letter-spacing="1" fill="#697784">BS-0026 · CONCEPT ILLUSTRATION</text>
 </svg>

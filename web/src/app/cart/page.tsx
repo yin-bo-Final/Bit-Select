@@ -162,8 +162,8 @@ function Cart() {
             image={<ShoppingBag size={72} weight="thin" />}
             description="购物袋还是空的"
           />
-          <Link href="/">
-            <Button type="primary">去挑些喜欢的</Button>
+          <Link href="/" className="navigation-button">
+            去挑些喜欢的
           </Link>
         </div>
       ) : (
@@ -242,8 +242,13 @@ function Cart() {
             </section>
             <aside className="checkout-summary">
               <div className="commerce-summary-heading">
-                <h2>确认订单</h2>
-                <span>订单摘要</span>
+                <div className="commerce-checkout-symbol">
+                  <ShoppingBag size={27} weight="duotone" />
+                </div>
+                <div>
+                  <h2>确认订单</h2>
+                  <span>让喜欢的好物来到身边</span>
+                </div>
               </div>
               <div className="summary-line">
                 <span>商品合计</span>
@@ -291,6 +296,7 @@ function Cart() {
                 </div>
               )}
               <Form
+                className="commerce-delivery-form"
                 form={addressForm}
                 layout="vertical"
                 onFinish={checkout}

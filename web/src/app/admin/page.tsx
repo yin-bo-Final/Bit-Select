@@ -97,8 +97,9 @@ function Admin() {
           <p>从商品上架到订单完成，让每一笔交易有条不紊。</p>
         </div>
         <div className="overview-refresh">
-          <Link href="/admin/ops">
-            <Button icon={<Pulse size={18} />}>运维工作台</Button>
+          <Link href="/admin/ops" className="navigation-button">
+            <Pulse size={18} aria-hidden="true" />
+            运维工作台
           </Link>
           {updatedAt && (
             <span>

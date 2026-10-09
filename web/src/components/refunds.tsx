@@ -9,6 +9,7 @@ import {
   Form,
   Input,
   Modal,
+  Pagination,
   Table,
   Tag,
 } from "antd";
@@ -95,6 +96,7 @@ export function Refunds({
   revision?: number;
 }) {
   const [items, setItems] = useState<RefundRequest[]>([]);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [review, setReview] = useState<{
@@ -147,6 +149,7 @@ export function Refunds({
       setBusy(false);
     }
   };
+  const currentPage = Math.min(page, Math.max(1, Math.ceil(items.length / 10)));
   return (
     <section className="refund-section commerce-section commerce-refunds">
       <div className="heading-with-action">
@@ -162,73 +165,75 @@ export function Refunds({
         </Button>
       </div>
       {error && <Alert type="error" title={error} />}
-      <Table<RefundRequest>
-        className={`commerce-table ${admin ? "" : "commerce-refund-table"}`}
-        rowKey="id"
-        dataSource={items}
-        loading={loading}
-        scroll={{ x: 850 }}
-        pagination={{
-          defaultPageSize: 10,
-          hideOnSinglePage: true,
-          responsive: true,
-          showLessItems: true,
-        }}
-        locale={{ emptyText: <Empty description="暂无售后申请" /> }}
-        columns={[
-          {
-            title: "订单号",
-            dataIndex: "orderNo",
-            render: (value) => (
-              <span className="commerce-reference">{value}</span>
-            ),
-          },
-          {
-            title: "金额",
-            dataIndex: "totalCents",
-            render: (value) => (
-              <strong className="commerce-mono">{money(value)}</strong>
-            ),
-          },
-          { title: "原因", dataIndex: "reason", width: 220 },
-          {
-            title: "状态",
-            dataIndex: "status",
-            render: (status) => <Tag>{labels[status] || status}</Tag>,
-          },
-          { title: "申请时间", dataIndex: "createdAt", render: date },
-          {
-            title: admin ? "审核" : "审核说明",
-            key: "review",
-            render: (_, item) =>
-              admin && item.status === "REQUESTED" ? (
-                <div className="order-actions">
-                  <Button
-                    size="small"
-                    type="primary"
-                    onClick={() =>
-                      setReview({ request: item, action: "approve" })
-                    }
-                  >
-                    验收退款
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() =>
-                      setReview({ request: item, action: "reject" })
-                    }
-                  >
-                    拒绝
-                  </Button>
-                </div>
-              ) : (
-                item.reviewReason || "等待处理"
+      {admin && (
+        <Table<RefundRequest>
+          className="commerce-table"
+          rowKey="id"
+          dataSource={items}
+          loading={loading}
+          scroll={{ x: 850 }}
+          pagination={{
+            defaultPageSize: 10,
+            hideOnSinglePage: true,
+            responsive: true,
+            showLessItems: true,
+          }}
+          locale={{ emptyText: <Empty description="暂无售后申请" /> }}
+          columns={[
+            {
+              title: "订单号",
+              dataIndex: "orderNo",
+              render: (value) => (
+                <span className="commerce-reference">{value}</span>
               ),
-          },
-        ]}
-      />
+            },
+            {
+              title: "金额",
+              dataIndex: "totalCents",
+              render: (value) => (
+                <strong className="commerce-mono">{money(value)}</strong>
+              ),
+            },
+            { title: "原因", dataIndex: "reason", width: 220 },
+            {
+              title: "状态",
+              dataIndex: "status",
+              render: (status) => <Tag>{labels[status] || status}</Tag>,
+            },
+            { title: "申请时间", dataIndex: "createdAt", render: date },
+            {
+              title: "审核",
+              key: "review",
+              render: (_, item) =>
+                item.status === "REQUESTED" ? (
+                  <div className="order-actions">
+                    <Button
+                      size="small"
+                      type="primary"
+                      onClick={() =>
+                        setReview({ request: item, action: "approve" })
+                      }
+                    >
+                      验收退款
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        setReview({ request: item, action: "reject" })
+                      }
+                    >
+                      拒绝
+                    </Button>
+                  </div>
+                ) : (
+                  item.reviewReason || "等待处理"
+                ),
+            },
+          ]}
+        />
+      )}
       {!admin && (
-        <div className="commerce-refund-mobile" aria-busy={loading}>
+        <div className="commerce-refund-list" aria-busy={loading}>
           {loading ? (
             <p className="muted">正在加载售后记录…</p>
           ) : !items.length ? (
@@ -237,29 +242,42 @@ export function Refunds({
               description="暂无售后申请"
             />
           ) : (
-            items.map((item) => (
-              <article key={item.id} className="commerce-refund-item">
-                <header>
-                  <span className="commerce-refund-state">
-                    {item.status === "COMPLETED" ? (
-                      <CheckCircle size={19} />
-                    ) : item.status === "REJECTED" ? (
-                      <XCircle size={19} />
-                    ) : (
-                      <Clock size={19} />
-                    )}
-                    {labels[item.status] || item.status}
-                  </span>
-                  <strong>{money(item.totalCents)}</strong>
-                </header>
-                <p className="commerce-reference">订单 {item.orderNo}</p>
-                <p>{item.reason}</p>
-                <div className="commerce-refund-review">
-                  {item.reviewReason || "等待处理"}
-                </div>
-                <time>{date(item.createdAt)}</time>
-              </article>
-            ))
+            items
+              .slice((currentPage - 1) * 10, currentPage * 10)
+              .map((item) => (
+                <article key={item.id} className="commerce-refund-item">
+                  <header>
+                    <span className="commerce-refund-state">
+                      {item.status === "COMPLETED" ? (
+                        <CheckCircle size={19} />
+                      ) : item.status === "REJECTED" ? (
+                        <XCircle size={19} />
+                      ) : (
+                        <Clock size={19} />
+                      )}
+                      {labels[item.status] || item.status}
+                    </span>
+                    <strong>{money(item.totalCents)}</strong>
+                  </header>
+                  <p className="commerce-reference">订单 {item.orderNo}</p>
+                  <p>{item.reason}</p>
+                  <div className="commerce-refund-review">
+                    {item.reviewReason || "等待处理"}
+                  </div>
+                  <time>{date(item.createdAt)}</time>
+                </article>
+              ))
+          )}
+          {!loading && items.length > 10 && (
+            <Pagination
+              responsive
+              showLessItems
+              current={currentPage}
+              pageSize={10}
+              total={items.length}
+              showSizeChanger={false}
+              onChange={setPage}
+            />
           )}
         </div>
       )}

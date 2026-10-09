@@ -112,15 +112,17 @@ export function AddressBook() {
               className={`address-card ${address.isDefault ? "commerce-address-default" : ""}`}
               key={address.id}
             >
-              <div>
-                <span className="commerce-address-marker">
-                  <House size={19} />
-                </span>
-                <strong>{address.recipient}</strong>
-                <span>{address.phone}</span>
-                {address.isDefault && <Tag>默认地址</Tag>}
+              <span className="commerce-address-marker">
+                <House size={22} weight="duotone" />
+              </span>
+              <div className="commerce-address-body">
+                <div className="commerce-address-person">
+                  <strong>{address.recipient}</strong>
+                  <span>{address.phone}</span>
+                  {address.isDefault && <Tag>默认地址</Tag>}
+                </div>
+                <p>{address.detail}</p>
               </div>
-              <p>{address.detail}</p>
               <footer>
                 <Button
                   type="text"

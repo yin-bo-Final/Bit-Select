@@ -10,6 +10,7 @@ import {
   Check,
   CreditCard,
   CheckCircle,
+  CaretDown,
 } from "@phosphor-icons/react";
 import { api, post, money, date, errorText } from "@/lib/api";
 import type { Order, PageResult } from "@/lib/types";
@@ -161,8 +162,8 @@ function Orders() {
             image={<Package size={72} weight="thin" />}
             description="还没有订单，去发现你的第一件好物"
           />
-          <Link href="/">
-            <Button type="primary">浏览商品</Button>
+          <Link href="/" className="navigation-button">
+            浏览商品
           </Link>
         </div>
       ) : (
@@ -218,30 +219,39 @@ function Orders() {
                     </div>
                   ))}
                 </div>
-                <div className="order-address">
-                  <MapPin size={18} />
-                  <div>
-                    <span>
-                      <strong>{order.address.recipient}</strong>
-                      <span className="commerce-mono">
-                        {order.address.phone}
-                      </span>
+                <details className="commerce-delivery-details">
+                  <summary>
+                    <MapPin size={19} />
+                    <span>配送信息</span>
+                    <span className="commerce-delivery-recipient">
+                      {order.address.recipient}
                     </span>
-                    <p>{order.address.detail}</p>
+                    <CaretDown size={17} className="commerce-delivery-toggle" />
+                  </summary>
+                  <div className="order-address">
+                    <div>
+                      <span>
+                        <strong>{order.address.recipient}</strong>
+                        <span className="commerce-mono">
+                          {order.address.phone}
+                        </span>
+                      </span>
+                      <p>{order.address.detail}</p>
+                    </div>
                   </div>
-                </div>
+                  {order.trackingNo && (
+                    <div className="tracking-note">
+                      <Truck size={20} />
+                      <span>模拟物流单号：{order.trackingNo}</span>
+                    </div>
+                  )}
+                </details>
                 {order.status === "PENDING_PAYMENT" && (
                   <Alert
                     title={`请在 ${date(order.expiresAt)} 前付款，超时将自动取消。`}
                     type="info"
                     showIcon
                   />
-                )}
-                {order.trackingNo && (
-                  <div className="tracking-note">
-                    <Truck size={20} />
-                    <span>模拟物流单号：{order.trackingNo}</span>
-                  </div>
                 )}
                 <div className="order-footer">
                   <div className="commerce-order-total">

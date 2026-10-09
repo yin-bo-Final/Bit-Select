@@ -14,10 +14,8 @@ def illustration(product):
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="512" height="400" viewBox="0 0 512 400" role="img">
 <title>{escape(product['name'])}：原创商品概念图</title>
 <desc>根据商品名称绘制的原创矢量示意，展示基本形态；并非真实商品照片。</desc>
-<rect width="512" height="400" fill="#edf0f2"/>
 <ellipse cx="256" cy="329" rx="124" ry="11" fill="#dce2e7"/>
 {shape(product['category'], COLORS[variant], base_name, variant)}
-<text x="256" y="374" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="11" letter-spacing="1" fill="#697784">{product['sku']} · CONCEPT ILLUSTRATION</text>
 </svg>'''
 
 
