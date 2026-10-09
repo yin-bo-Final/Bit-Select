@@ -6,10 +6,13 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -25,6 +28,25 @@ public class AiController {
   private final SiliconFlowClient model;
   private final OpsTraceStore traces;
   private final Semaphore capacity = new Semaphore(3);
+  private final ConcurrentHashMap<String, ActiveRequest> activeRequests = new ConcurrentHashMap<>();
+
+  private static final class ActiveRequest {
+    final long user;
+    final ChatStream stream;
+    final CompletableFuture<Void> cleaned = new CompletableFuture<>();
+    final AtomicBoolean cancellationRequested = new AtomicBoolean();
+
+    ActiveRequest(long user, ChatStream stream) {
+      this.user = user;
+      this.stream = stream;
+    }
+
+    void cancel() {
+      if (cancellationRequested.compareAndSet(false, true))
+        // Closing an upstream stream must not make the HTTP cancellation handler unbounded.
+        Thread.startVirtualThread(stream::cancel);
+    }
+  }
 
   @Value("${ai.request-timeout-seconds:170}")
   private long requestTimeoutSeconds = 170;
@@ -81,19 +103,24 @@ public class AiController {
       // Observability is never a prerequisite for serving the accepted request.
     }
     final var requestTrace = trace;
+    String traceId = requestTrace.id();
+    final String requestId =
+        traceId == null || traceId.isBlank() ? UUID.randomUUID().toString() : traceId;
     var stream =
         new ChatStream(
             control,
             Duration.ofSeconds(Math.max(1, requestTimeoutSeconds)),
             Duration.ofSeconds(Math.max(1, heartbeatSeconds)),
             requestTrace);
+    var active = new ActiveRequest(user, stream);
+    activeRequests.put(requestId, active);
     Thread.startVirtualThread(
         () -> {
           try {
             model.bindRequest(control);
             var metadata = new LinkedHashMap<String, Object>();
             metadata.put("conversationId", conversation);
-            metadata.put("requestId", requestTrace.id());
+            metadata.put("requestId", requestId);
             stream.send("meta", metadata);
             workflow.run(user, conversation, body.message(), stream::send, stream::persist);
             stream.succeed(conversation);
@@ -121,10 +148,37 @@ public class AiController {
             } finally {
               // Do not admit another generation until the cancelled worker has actually stopped.
               capacity.release();
+              activeRequests.remove(requestId, active);
+              active.cleaned.complete(null);
             }
           }
         });
     return stream.emitter();
+  }
+
+  @PostMapping(value = "/requests/{requestId}/cancel", produces = MediaType.APPLICATION_JSON_VALUE)
+  public ResponseEntity<Map<String, Boolean>> cancelRequest(
+      HttpServletRequest request, @PathVariable String requestId) {
+    long user = sessions.requireUserId(request);
+    var active = activeRequests.get(requestId);
+    if (active == null) return cancellationStatus(true);
+    if (active.user != user) throw ApiException.missing();
+    active.cancel();
+    try {
+      active.cleaned.get(2, TimeUnit.SECONDS);
+      return cancellationStatus(true);
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+    } catch (TimeoutException | ExecutionException pending) {
+      // The caller may poll; the owner lock and permit stay with the live worker.
+    }
+    return cancellationStatus(false);
+  }
+
+  private ResponseEntity<Map<String, Boolean>> cancellationStatus(boolean finished) {
+    return ResponseEntity.status(finished ? 200 : 202)
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(Map.of("finished", finished));
   }
 
   @GetMapping("/conversations")

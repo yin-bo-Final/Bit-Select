@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.CancellationException;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.*;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
@@ -89,42 +90,61 @@ public class MemoryService {
   }
 
   public List<Map<String, Object>> recall(long user, String query) throws Exception {
-    if (!preferenceEnabled(user)) return List.of();
+    checkRecallRequest();
+    boolean remember = preferenceEnabled(user);
+    checkRecallRequest();
+    if (!remember) return List.of();
     Map<String, Map<String, Object>> candidates = new LinkedHashMap<>();
     try {
       var embedding = model.embed(List.of(query));
-      for (var hit : vectors.search(COLLECTION, embedding.getFirst(), "userId == " + user, 10))
+      checkRecallRequest();
+      var hits = vectors.search(COLLECTION, embedding.getFirst(), "userId == " + user, 10);
+      checkRecallRequest();
+      for (var hit : hits)
         addCandidate(candidates, user, Objects.toString(hit.get("memoryId"), ""));
-    } catch (Exception ignored) {
+    } catch (Exception failure) {
+      rethrowRecallCancellation(failure);
       /* SQL remains authoritative when a projection is unavailable. */
     }
+    checkRecallRequest();
     try (var session = graph.session()) {
+      checkRecallRequest();
       var records =
           session.run(
               "MATCH (f:BitMemory {userId:$user}) WHERE f.deleted=false AND (toLower(f.entity)"
                   + " CONTAINS toLower($query) OR toLower($query) CONTAINS toLower(f.entity))"
                   + " RETURN f.memoryId AS id LIMIT 10",
               Map.of("user", user, "query", query));
-      while (records.hasNext()) addCandidate(candidates, user, records.next().get("id").asString());
-    } catch (Exception ignored) {
+      checkRecallRequest();
+      while (records.hasNext()) {
+        checkRecallRequest();
+        addCandidate(candidates, user, records.next().get("id").asString());
+        checkRecallRequest();
+      }
+    } catch (Exception failure) {
+      rethrowRecallCancellation(failure);
       /* Graph failure must not invent relationships. */
     }
-    for (var row :
+    checkRecallRequest();
+    var recent =
         db.queryForList(
             "SELECT id FROM ai_memory WHERE user_id=? AND deleted=FALSE ORDER BY updated_at DESC"
                 + " LIMIT 12",
-            user)) addCandidate(candidates, user, row.get("id").toString());
+            user);
+    checkRecallRequest();
+    for (var row : recent) addCandidate(candidates, user, row.get("id").toString());
+    checkRecallRequest();
     var ordered = MemoryPolicy.newestFirst(candidates.values());
     if (ordered.size() < 2) return ordered;
     try {
-      var decision =
-          model.json(
-              model.complete(
-                  List.of(
-                      Map.of("role", "system", "content", Prompts.read("memory/select-consistent")),
-                      Map.of(
-                          "role", "user", "content", com.bitselect.contracts.Json.write(ordered))),
-                  800));
+      var response =
+          model.complete(
+              List.of(
+                  Map.of("role", "system", "content", Prompts.read("memory/select-consistent")),
+                  Map.of("role", "user", "content", com.bitselect.contracts.Json.write(ordered))),
+              800);
+      checkRecallRequest();
+      var decision = model.json(response);
       if (!decision.path("groups").isArray() || !decision.path("uncertainIds").isArray())
         return ordered.subList(0, 1);
       List<List<String>> groups = new ArrayList<>();
@@ -137,12 +157,34 @@ public class MemoryService {
       Set<String> uncertain = new HashSet<>();
       decision.path("uncertainIds").forEach(n -> uncertain.add(n.asText()));
       return MemoryPolicy.consistent(ordered, groups, uncertain);
-    } catch (Exception ignored) {
+    } catch (Exception failure) {
+      rethrowRecallCancellation(failure);
       return ordered.subList(0, 1);
     }
   }
 
+  private void checkRecallRequest() {
+    model.checkRequest();
+    if (Thread.currentThread().isInterrupted())
+      throw new CancellationException("MEMORY_RECALL_CANCELLED");
+  }
+
+  private void rethrowRecallCancellation(Exception failure) throws InterruptedException {
+    // HttpClient.send may clear the interrupt flag when throwing; the bound control is
+    // authoritative.
+    checkRecallRequest();
+    Throwable cause = failure;
+    for (int depth = 0; cause != null && depth < 16; depth++, cause = cause.getCause()) {
+      if (cause instanceof CancellationException cancelled) throw cancelled;
+      if (cause instanceof InterruptedException interrupted) {
+        Thread.currentThread().interrupt();
+        throw interrupted;
+      }
+    }
+  }
+
   private void addCandidate(Map<String, Map<String, Object>> candidates, long user, String id) {
+    checkRecallRequest();
     var rows =
         db.queryForList(
             "SELECT m.id,m.entity,m.attribute_name,m.content,m.confidence,m.updated_at AS"
@@ -151,6 +193,7 @@ public class MemoryService {
                 + " ai_memory m WHERE m.id=? AND m.user_id=? AND m.deleted=FALSE",
             id,
             user);
+    checkRecallRequest();
     if (!rows.isEmpty()) candidates.put(id, rows.getFirst());
   }
 

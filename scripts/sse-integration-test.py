@@ -4,6 +4,8 @@ Requires running MySQL, Redis, Nacos and Commerce; uses a fresh QA account whose
 memory is disabled. Only the subprocesses started here are stopped. Existing
 IDEA services and private environment files are never changed. The model is a
 loopback HTTP fixture: no SiliconFlow account, key or paid call is used.
+Retrieval cancellation uses one temporary, namespaced knowledge document/chunk
+with negative IDs; cleanup deletes only those rows and never contacts Milvus.
 
 Example after Maven verify and npm ci:
   python scripts/sse-integration-test.py --env-file infra/.env --with-next
@@ -30,6 +32,7 @@ import sys
 import threading
 import time
 import uuid
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -123,12 +126,14 @@ class ModelHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         self.close_connection = True
-        if self.path != "/v1/chat/completions":
+        if self.path not in {"/v1/chat/completions", "/v1/embeddings"}:
             self.server.unexpected_paths.append(self.path)
-            self.send_error(400, "Unexpected model endpoint in general-intent test")
+            self.send_error(400, "Unexpected model endpoint in SSE fixture")
             return
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
-        text = "\n".join(str(message.get("content", "")) for message in body.get("messages", []))
+        text = ("\n".join(str(value) for value in body.get("input", []))
+                if self.path == "/v1/embeddings" else
+                "\n".join(str(message.get("content", "")) for message in body.get("messages", [])))
         markers = re.findall(r"SSECASE_[a-f0-9]+_[a-z]+", text)
         if not markers or markers[-1] not in self.server.records:
             self.server.unexpected_paths.append("unrecognized-request")
@@ -138,9 +143,22 @@ class ModelHandler(BaseHTTPRequestHandler):
         record = self.server.records[marker]
         mode = record["mode"]
         try:
+            if self.path == "/v1/embeddings":
+                if mode != "cancelretrieve":
+                    self.server.unexpected_paths.append(self.path)
+                    self.send_error(400, "Unexpected embedding scenario")
+                    return
+                record["embeddingStartedAt"] = time.monotonic()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", "4096")
+                self.end_headers()
+                self.wfile.flush()
+                self.wait_connected(30, record)
+                return
             if not body.get("stream"):
                 if body.get("max_tokens") == 200:
-                    answer = '{"intent":"general"}'
+                    answer = json.dumps({"intent": "manual" if mode == "cancelretrieve" else "general"})
                 else:
                     answer = "你好，请回应这个流式测试：" + marker
                     record["rewriteStartedAt"] = time.monotonic()
@@ -188,11 +206,12 @@ class Client:
         self.base = loopback_url(base)
         self.http = build_opener(ProxyHandler({}), HTTPCookieProcessor(http.cookiejar.CookieJar()))
 
-    def request(self, method, path, body=None):
+    def request(self, method, path, body=None, headers=None, timeout=25):
         data = None if body is None else json.dumps(body, ensure_ascii=False).encode()
         return self.http.open(Request(self.base + path, data=data, method=method, headers={
             "Content-Type": "application/json", "Origin": "http://localhost:3000",
-        }), timeout=25)
+            **(headers or {}),
+        }), timeout=timeout)
 
     def call(self, method, path, body=None, status=200):
         try:
@@ -202,6 +221,16 @@ class Client:
             actual, data = error.code, error.read()
         check(actual == status, f"{method} {path}: expected HTTP {status}, got {actual}")
         return json.loads(data or b"{}")
+
+    def json_response(self, method, path, body=None, headers=None, timeout=25):
+        try:
+            response = self.request(method, path, body, headers=headers, timeout=timeout)
+        except HTTPError as error:
+            response = error
+        with response:
+            check("application/json" in response.headers.get("Content-Type", "").lower(),
+                  f"{method} {path}: expected an explicit JSON response")
+            return response.status, json.loads(response.read() or b"{}")
 
 
 def frames(response):
@@ -244,7 +273,8 @@ def await_ready(client, processes, seconds):
 
 def verify_operations_trace(admin, request_id, mode, output_chars):
     check(isinstance(request_id, str) and bool(request_id), "SSE metadata omitted operations request ID")
-    expected = "completed" if mode == "normal" else "cancelled" if mode in {"cancel", "cancelrewrite"} else "failed"
+    expected = ("completed" if mode == "normal" else "cancelled"
+                if mode in {"cancel", "cancelrewrite", "cancelretrieve"} else "failed")
     observed = {}
 
     def terminal_recorded():
@@ -276,6 +306,12 @@ def verify_operations_trace(admin, request_id, mode, output_chars):
     if mode == "cancelrewrite":
         check(observed["firstTokenMs"] is None and {step["code"] for step in steps} == {"rewrite"},
               "Cancelled rewriting must not invent later workflow phases")
+    if mode == "cancelretrieve":
+        check(observed["firstTokenMs"] is None and
+              {step["code"] for step in steps} == {"rewrite", "intent", "retrieve"},
+              "Cancelled retrieval must not invent compose/save phases")
+        check(next(step for step in steps if step["code"] == "retrieve")["status"] == "cancelled",
+              "Stopped retrieval was not classified as cancelled")
     check("prompt" not in observed and "answer" not in observed, "Operations response exposed raw model inputs")
 
 
@@ -350,6 +386,7 @@ def run_chat(client, model, mode, conversation=None, operations_admin=None):
         answer = "".join(value["content"] for kind, value, _ in events if kind == "delta")
         check(len(messages) == 2 and messages[0]["role"] == "user" and messages[1]["role"] == "assistant",
               "A completed fresh/retried turn was not saved exactly once")
+        check(messages[0]["content"] == body["message"], "A cancelled question leaked into the persisted retry")
         check(messages[1]["content"] == answer, "Persisted answer differs from streamed text")
     else:
         check(messages == [], "Failed or cancelled answer was saved as a completed conversation")
@@ -364,6 +401,157 @@ def run_chat(client, model, mode, conversation=None, operations_admin=None):
         result["cancelPropagationSeconds"] = round(record["upstreamDisconnectedAt"] - record["clientAbortedAt"], 3)
     print("PASS: " + json.dumps(result, ensure_ascii=False), flush=True)
     return cid, result
+
+
+def cancel_until_finished(client, request_id, seconds=8):
+    """A 202 is pending cleanup, never permission to start another generation."""
+    deadline = time.monotonic() + seconds
+    statuses = []
+    for _ in range(40):
+        remaining = deadline - time.monotonic()
+        check(remaining > 0, "Cancellation cleanup acknowledgement timed out")
+        status, body = client.json_response(
+            "POST", "/api/ai/requests/" + request_id + "/cancel",
+            timeout=min(3, remaining))
+        statuses.append(status)
+        check((status == 200 and body.get("finished") is True) or
+              (status == 202 and body.get("finished") is False),
+              "Cancellation must distinguish completed cleanup from pending cleanup")
+        if status == 200:
+            return statuses
+        # Only a confirmed pending response permits a bounded polling delay.
+        time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+    raise AssertionError("Cancellation cleanup exceeded the finite polling limit")
+
+
+def run_retrieve_cancel_retry(client, outsider, model, operations_admin):
+    marker, record = model.scenario("cancelretrieve")
+    events, metadata = [], None
+    reached_retrieve = False
+    response = client.request("POST", "/api/ai/chat", {"message": "请查找说明书。" + marker},
+                              headers={"Accept": "text/event-stream"})
+    try:
+        check(response.status == 200 and "text/event-stream" in response.headers.get("Content-Type", ""),
+              "Retrieval cancellation did not establish an SSE stream")
+        for kind, body, timestamp in frames(response):
+            events.append((kind, body, timestamp))
+            if kind == "meta":
+                metadata = body
+            if kind == "phase" and body.get("code") == "retrieve" and body.get("status") == "running":
+                reached_retrieve = True
+                check(metadata and metadata.get("requestId") and metadata.get("conversationId"),
+                      "Retrieval cancellation requires a nonempty request ID and conversation ID")
+                # Phase delivery may precede the DB read. Synchronize only with fixture entry,
+                # never with disconnect/lock cleanup; the embedding response remains blocked.
+                wait_until(lambda: "embeddingStartedAt" in record, 4,
+                           "Retrieval never reached the blocked fake embedding request")
+                request_id, cid = metadata["requestId"], metadata["conversationId"]
+                status, _ = Client(client.base).json_response("POST", "/api/ai/requests/" + request_id + "/cancel")
+                check(status == 401, "Anonymous caller could cancel an active request")
+                status, _ = outsider.json_response("POST", "/api/ai/requests/" + request_id + "/cancel")
+                check(status == 404, "Another user could discover or cancel an active request")
+                # A denied cancel must leave the request active. Reproduce the former 409→500
+                # negotiation bug with the browser's SSE-only Accept header before cancellation.
+                status, busy = client.json_response(
+                    "POST", "/api/ai/chat", {"conversationId": cid, "message": "重复请求。" + marker},
+                    headers={"Accept": "text/event-stream"})
+                check(status == 409 and busy.get("code") == "CONVERSATION_BUSY",
+                      "Active conversation must return a JSON 409 even for SSE-only Accept")
+                check("upstreamDisconnectedAt" not in record,
+                      "Denied cancellation changed the other user's active embedding request")
+                record["clientAbortedAt"] = time.monotonic()
+                break
+    finally:
+        response.close()
+    check(reached_retrieve, "Stream terminated before entering retrieval")
+    # The very next network operation is explicit cancellation. Do not wait for heartbeat,
+    # upstream EOF, operations writes or a conversation read before acknowledging cleanup.
+    statuses = cancel_until_finished(client, request_id)
+    acknowledged = time.monotonic()
+    _, retry = run_chat(client, model, "normal", cid, operations_admin=operations_admin)
+    retry["retryAfter"] = "cancelretrieve"
+    # Observation is deliberately after retry: the retry itself proves lock/permit cleanup.
+    wait_until(lambda: "upstreamDisconnectedAt" in record, 3,
+               "Acknowledged retrieval cancellation left the embedding socket open")
+    verify_operations_trace(operations_admin, request_id, "cancelretrieve", 0)
+    status, completed = client.json_response("POST", "/api/ai/requests/" + request_id + "/cancel")
+    check(status == 200 and completed.get("finished") is True, "Completed cancellation is not idempotent")
+    status, unknown = client.json_response("POST", "/api/ai/requests/" + str(uuid.uuid4()) + "/cancel")
+    check(status == 200 and unknown.get("finished") is True, "Unknown cancellation is not idempotent")
+    result = {"mode": "cancelretrieve", "cancelHttpStatuses": statuses,
+              "cleanupAcknowledgementSeconds": round(acknowledged - record["clientAbortedAt"], 3),
+              "cancelPropagationSeconds": round(record["upstreamDisconnectedAt"] - record["clientAbortedAt"], 3),
+              "events": [kind for kind, _, _ in events], "operationsTrace": "verified",
+              "foreignCancellation": "denied", "retryStartedImmediatelyAfterAcknowledgement": True}
+    print("PASS: " + json.dumps(result, ensure_ascii=False), flush=True)
+    return [result, retry]
+
+
+def prepare_retrieval_fixture(stack, java, jar, env, directory):
+    """Add/delete only our random negative-ID knowledge rows; no catalog or vector writes."""
+    namespace = "SSE_FIXTURE_" + uuid.uuid4().hex
+    fixture_id = -int(uuid.uuid4().hex[:13], 16)
+    # These tables have no product FK in V2. Use an unoccupied negative ID for the document,
+    # chunk and synthetic product; never reuse any of the 200 real catalog IDs/documents.
+    with zipfile.ZipFile(jar) as archive:
+        drivers = [name for name in archive.namelist()
+                   if name.startswith("BOOT-INF/lib/mysql-connector-j-") and name.endswith(".jar")]
+        check(len(drivers) == 1, "Expected one bundled MySQL JDBC driver in the AI artifact")
+        driver = directory / "fixture-mysql-driver.jar"
+        driver.write_bytes(archive.read(drivers[0]))
+    source = directory / "SseKnowledgeFixture.java"
+    source.write_text(r'''
+import java.sql.*;
+class SseKnowledgeFixture {
+  static String env(String name, String fallback) {
+    return System.getenv().getOrDefault(name, fallback);
+  }
+  public static void main(String[] args) throws Exception {
+    long id = Long.parseLong(env("SSE_KNOWLEDGE_ID", "0"));
+    String marker = env("SSE_KNOWLEDGE_NAMESPACE", "");
+    if (id >= 0 || !marker.matches("SSE_FIXTURE_[a-f0-9]{32}")) throw new IllegalArgumentException();
+    String url = "jdbc:mysql://" + env("MYSQL_HOST", "127.0.0.1") + ":" + env("MYSQL_PORT", "13306")
+        + "/" + env("MYSQL_DATABASE", "bit_select")
+        + "?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&connectTimeout=5000&socketTimeout=5000";
+    try (Connection db = DriverManager.getConnection(url, env("MYSQL_USER", "bit_select"), env("MYSQL_PASSWORD", ""))) {
+      db.setAutoCommit(false);
+      try {
+        if (args[0].equals("setup")) {
+          try (PreparedStatement query = db.prepareStatement("INSERT INTO knowledge_document"
+              + "(id,product_id,title,content_hash,original_text,status,chunk_count) VALUES(?,?,?,?,?,'READY',1)")) {
+            query.setLong(1,id); query.setLong(2,id); query.setString(3,marker);
+            query.setString(4,marker); query.setString(5,"本地取消测试说明书，不含真实商品参数。"); query.executeUpdate();
+          }
+          try (PreparedStatement query = db.prepareStatement("INSERT INTO knowledge_chunk"
+              + "(id,document_id,product_id,title,heading,content,start_offset,end_offset,active) VALUES(?,?,?,?,?,?,0,1,TRUE)")) {
+            query.setLong(1,id); query.setLong(2,id); query.setLong(3,id); query.setString(4,marker);
+            query.setString(5,"说明书"); query.setString(6,"本地SSE取消回归专用临时片段。"); query.executeUpdate();
+          }
+        } else if (args[0].equals("cleanup")) {
+          try (PreparedStatement query = db.prepareStatement("DELETE FROM knowledge_chunk WHERE id=? AND document_id=? AND title=?")) {
+            query.setLong(1,id); query.setLong(2,id); query.setString(3,marker); query.executeUpdate();
+          }
+          try (PreparedStatement query = db.prepareStatement("DELETE FROM knowledge_document WHERE id=? AND title=? AND content_hash=?")) {
+            query.setLong(1,id); query.setString(2,marker); query.setString(3,marker); query.executeUpdate();
+          }
+        } else throw new IllegalArgumentException();
+        db.commit();
+      } catch (Exception failure) { db.rollback(); throw failure; }
+    }
+  }
+}
+'''.lstrip(), encoding="utf-8")
+    helper_env = dict(env, SSE_KNOWLEDGE_ID=str(fixture_id), SSE_KNOWLEDGE_NAMESPACE=namespace)
+
+    def run(mode):
+        with (directory / ("knowledge-fixture-" + mode + ".log")).open("wb") as log:
+            subprocess.run([java, "-Xmx96m", "-XX:ActiveProcessorCount=2", "--class-path", str(driver), str(source), mode],
+                           env=helper_env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=30,
+                           creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+
+    # Cleanup is registered before setup, and includes both namespace and ID predicates.
+    stack.callback(run, "cleanup")
+    run("setup")
 
 
 def find_jar(service, supplied, jar_dir=None):
@@ -508,6 +696,14 @@ def main():
                 _, retry = run_chat(client, model, "normal", cid, operations_admin=operations_admin)
                 retry["retryAfter"] = mode
                 results.append(retry)
+        outsider = Client(base)
+        outsider.call("POST", "/api/auth/register", {"username": "sse_other_" + nonce,
+                      "password": "LocalSse-" + uuid.uuid4().hex, "nickname": "取消权限验证"})
+        # Scope the knowledge fixture to this one blocked retrieval test. A successful retry
+        # is general intent, so it never sends a vector or reranking request.
+        with contextlib.ExitStack() as retrieval_stack:
+            prepare_retrieval_fixture(retrieval_stack, args.java, copied_ai, env, directory)
+            results.extend(run_retrieve_cancel_retry(client, outsider, model, operations_admin))
         check(not model.unexpected_paths, "Unexpected model/embedding/rerank call; test scope changed")
         report = {"chain": "Next→Gateway→AI→local fake model" if args.with_next else "Gateway→AI→local fake model",
                   "paidModelCalls": 0, "results": results}
